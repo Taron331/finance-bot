@@ -30,7 +30,7 @@ CATEGORIES_EXPENSE = ["🍔 Еда", "🛒 Продукты", "🚗 Авто", "
 CATEGORIES_INCOME = ["💼 Зарплата", "📈 Инвестиции", "🎁 Подарок", "💰 Другое"]
 ACCOUNTS = ["💳 Карта", "💵 Наличные"]
 
-# Временное хранение контекста ввода пользователя
+# Временное хранение выборов пользователя
 user_data_store = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -41,10 +41,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         f"Привет, {update.message.from_user.first_name}!\n\n"
-        "💡 *Как вносить транзакции:*\n"
-        "• Напишите сумму (например: `15` для расхода или `+1000` для дохода).\n"
-        "• Используйте кнопки для выбора категории и счета.\n"
-        "• Также можно писать в одну строку: `15 Обед Карта`.",
+        "💡 *Как вносить данные:*\n"
+        "• Отправьте сумму (например: `15` для расхода или `+1000` для дохода) — бот покажет кнопки выбора.\n"
+        "• Или напишите в одну строку: `15 Обед Карта`.\n"
+        "• Для отмены используйте кнопку *'🗑 Удалить последнюю запись'*.",
         parse_mode="Markdown",
         reply_markup=reply_markup
     )
@@ -63,14 +63,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "💡 *Инструкция:*\n"
             "1. Введите число: `25` (расход) или `+500` (доход).\n"
             "2. Выберите категорию и счет кнопками.\n"
-            "3. Для быстрого удаления нажмите *'Удалить последнюю запись'*.",
+            "3. Нажмите *'Удалить последнюю запись'* для очистки тестов.",
             parse_mode="Markdown"
         )
         return
 
     parts = text.split(" ")
     
-    # Режим быстрой записи в одну строку (например: "15 Обед Карта")
+    # Запись в одну строку (например: "15 Обед Карта")
     if len(parts) >= 2:
         amount_str = parts[0].replace(",", ".")
         try:
@@ -87,7 +87,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             sheet.append_row([now, user_name, trans_type, category, amount, account])
             
-            keyboard = [[InlineKeyboardButton("❌ Отменить/Удалить", callback_dict_data("delete_last"))]]
+            keyboard = [[InlineKeyboardButton("❌ Отменить/Удалить", callback_data="delete_last")]]
             await update.message.reply_text(
                 f"✅ *Записано:*\n• {trans_type}: {amount:.2f} €\n• Категория: {category}\n• Счет: {account}",
                 parse_mode="Markdown",
@@ -97,7 +97,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except ValueError:
             pass
 
-    # Режим интерактивного ввода по числу (например: "15" или "+1000")
+    # Интерактивный ввод (например: "15" или "+1000")
     amount_str = text.replace(",", ".")
     try:
         if amount_str.startswith("+"):
@@ -115,7 +115,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "user_name": user_name
         }
 
-        # Формируем Inline-кнопки категорий
         keyboard = []
         row = []
         for cat in categories:
@@ -149,7 +148,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user_id in user_data_store:
             user_data_store[user_id]["category"] = category
 
-            # Переходим к выбору счета
             keyboard = [[InlineKeyboardButton(acc, callback_data=f"acc_{acc}")] for acc in ACCOUNTS]
             await query.edit_message_text(
                 f"Сумма: *{user_data_store[user_id]['amount']:.2f} €*\nКатегория: *{category}*\n\nВыберите счет:",
@@ -164,7 +162,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             info = user_data_store.pop(user_id)
             now = datetime.datetime.now().strftime("%d.%m.%Y %H:%M:%S")
 
-            # Вносим запись в Google Таблицу
             sheet.append_row([now, info["user_name"], info["type"], info["category"], info["amount"], account])
 
             keyboard = [[InlineKeyboardButton("❌ Отменить/Удалить", callback_data="delete_last")]]
