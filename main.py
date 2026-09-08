@@ -224,7 +224,14 @@ async def delete_last_row_query(query):
         await query.edit_message_text("⚠️ Таблица пуста, нечего удалять.")
 
 def main():
-    app = Application.builder().token(TOKEN).build()
+    proxy_url = "http://proxy.server:3128"
+    app = (
+        Application.builder()
+        .token(TOKEN)
+        .proxy_url(proxy_url)
+        .get_updates_proxy_url(proxy_url)
+        .build()
+    )
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(button_click))
