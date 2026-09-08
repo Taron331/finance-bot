@@ -30,24 +30,23 @@ except Exception:
 CATEGORIES_EXPENSE = ["🍔 Еда", "🛒 Продукты", "🚗 Авто", "🏠 Дом", "🎉 Развлечения", "📦 Другое"]
 CATEGORIES_INCOME = ["💼 Зарплата", "📈 Инвестиции", "🎁 Подарок", "💰 Другое"]
 ACCOUNTS = ["💳 Карта", "💵 Наличные"]
+PRESET_AMOUNTS_EXPENSE = [5, 10, 15, 20, 50, 100]
+PRESET_AMOUNTS_INCOME = [100, 200, 500, 1000]
 
-# Временное хранение выборов пользователя
 user_data_store = {}
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def get_main_reply_keyboard():
     keyboard = [
+        ["➖ Добавить Расход", "➕ Добавить Доход"],
         ["🗑 Удалить последнюю запись", "📊 Помощь"]
     ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"Привет, {update.message.from_user.first_name}!\n\n"
-        "💡 *Как вносить данные:*\n"
-        "• Отправьте сумму (например: `15` для расхода или `+1000` для дохода) — бот покажет кнопки выбора.\n"
-        "• Или напишите в одну строку: `15 Обед Карта`.\n"
-        "• Для отмены используйте кнопку *'🗑 Удалить последнюю запись'*.",
-        parse_mode="Markdown",
-        reply_markup=reply_markup
+        "Выберите действие с помощью кнопок снизу:",
+        reply_markup=get_main_reply_keyboard()
     )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -61,78 +60,89 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text in ["📊 Помощь", "❓ Помощь"]:
         await update.message.reply_text(
-            "💡 *Инструкция:*\n"
-            "1. Введите число: `25` (расход) или `+500` (доход).\n"
-            "2. Выберите категорию и счет кнопками.\n"
-            "3. Нажмите *'Удалить последнюю запись'* для очистки тестов.",
-            parse_mode="Markdown"
+            "💡 Используйте нижнее меню для выбора действия. Все операции выполняются по кнопкам!",
+            reply_markup=get_main_reply_keyboard()
         )
         return
 
-    parts = text.split(" ")
-    
-    # Запись в одну строку (например: "15 Обед Карта")
-    if len(parts) >= 2:
-        amount_str = parts[0].replace(",", ".")
-        try:
-            if amount_str.startswith("+"):
-                trans_type = "Доход"
-                amount = float(amount_str[1:])
-            else:
-                trans_type = "Расход"
-                amount = float(amount_str)
+    if text == "➖ Добавить Расход":
+        user_data_store[user_id] = {"type": "Расход", "user_name": user_name}
+        keyboard = []
+        row = []
+        for amt in PRESET_AMOUNTS_EXPENSE:
+            row.append(InlineKeyboardButton(f"{amt} €", callback_data=f"amt_{amt}"))
+            if len(row) == 3:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        keyboard.append([InlineKeyboardButton("✏️ Ввести свою сумму", callback_data="manual_amount")])
 
-            category = parts[1]
-            account = " ".join(parts[2:]) if len(parts) > 2 else "Карта"
-            now = datetime.datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+        await update.message.reply_text(
+            "🔴 *Добавление расхода*\nВыберите сумму:",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
 
-            sheet.append_row([now, user_name, trans_type, category, amount, account])
-            
-            keyboard = [[InlineKeyboardButton("❌ Отменить/Удалить", callback_data="delete_last")]]
-            await update.message.reply_text(
-                f"✅ *Записано:*\n• {trans_type}: {amount:.2f} €\n• Категория: {category}\n• Счет: {account}",
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-            return
-        except ValueError:
-            pass
+    if text == "➕ Добавить Доход":
+        user_data_store[user_id] = {"type": "Доход", "user_name": user_name}
+        keyboard = []
+        row = []
+        for amt in PRESET_AMOUNTS_INCOME:
+            row.append(InlineKeyboardButton(f"+{amt} €", callback_data=f"amt_{amt}"))
+            if len(row) == 2:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        keyboard.append([InlineKeyboardButton("✏️ Ввести свою сумму", callback_data="manual_amount")])
 
-    # Интерактивный ввод (например: "15" или "+1000")
+        await update.message.reply_text(
+            "🟢 *Добавление дохода*\nВыберите сумму:",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+
+    # Если пользователь решил вписать число вручную
     amount_str = text.replace(",", ".")
     try:
         if amount_str.startswith("+"):
             trans_type = "Доход"
             amount = float(amount_str[1:])
-            categories = CATEGORIES_INCOME
         else:
             trans_type = "Расход"
             amount = float(amount_str)
-            categories = CATEGORIES_EXPENSE
 
         user_data_store[user_id] = {
             "amount": amount,
             "type": trans_type,
             "user_name": user_name
         }
-
-        keyboard = []
-        row = []
-        for cat in categories:
-            row.append(InlineKeyboardButton(cat, callback_data=f"cat_{cat}"))
-            if len(row) == 2:
-                keyboard.append(row)
-                row = []
-        if row:
-            keyboard.append(row)
-
-        await update.message.reply_text(
-            f"Сумма: *{amount:.2f} €* ({trans_type})\nВыберите категорию:",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        await show_categories(update.message, user_id)
     except ValueError:
-        await update.message.reply_text("⚠️ Введите сумму числом (например: `15` или `+500`)", parse_mode="Markdown")
+        await update.message.reply_text("Пожалуйста, используйте кнопки меню снизу.", reply_markup=get_main_reply_keyboard())
+
+async def show_categories(target, user_id):
+    trans_type = user_data_store[user_id]["type"]
+    categories = CATEGORIES_INCOME if trans_type == "Доход" else CATEGORIES_EXPENSE
+
+    keyboard = []
+    row = []
+    for cat in categories:
+        row.append(InlineKeyboardButton(cat, callback_data=f"cat_{cat}"))
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+
+    msg_text = f"Сумма: *{user_data_store[user_id]['amount']:.2f} €* ({trans_type})\nВыберите категорию:"
+    if hasattr(target, 'edit_message_text'):
+        await target.edit_message_text(msg_text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+    else:
+        await target.reply_text(msg_text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -144,11 +154,21 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await delete_last_row_query(query)
         return
 
+    if data == "manual_amount":
+        await query.edit_message_text("Отправьте сумму сообщением (например: `12.50`):", parse_mode="Markdown")
+        return
+
+    if data.startswith("amt_"):
+        amount = float(data.replace("amt_", ""))
+        if user_id in user_data_store:
+            user_data_store[user_id]["amount"] = amount
+            await show_categories(query, user_id)
+        return
+
     if data.startswith("cat_"):
         category = data.replace("cat_", "")
         if user_id in user_data_store:
             user_data_store[user_id]["category"] = category
-
             keyboard = [[InlineKeyboardButton(acc, callback_data=f"acc_{acc}")] for acc in ACCOUNTS]
             await query.edit_message_text(
                 f"Сумма: *{user_data_store[user_id]['amount']:.2f} €*\nКатегория: *{category}*\n\nВыберите счет:",
@@ -184,10 +204,11 @@ async def delete_last_row(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sheet.delete_rows(last_row_index)
         await update.message.reply_text(
             f"🗑 *Удалена последняя запись:*\n`{' | '.join(deleted_data)}`",
-            parse_mode="Markdown"
+            parse_mode="Markdown",
+            reply_markup=get_main_reply_keyboard()
         )
     else:
-        await update.message.reply_text("⚠️ Таблица пуста, нечего удалять.")
+        await update.message.reply_text("⚠️ Таблица пуста, нечего удалять.", reply_markup=get_main_reply_keyboard())
 
 async def delete_last_row_query(query):
     rows = sheet.get_all_values()
