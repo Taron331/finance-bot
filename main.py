@@ -228,8 +228,8 @@ def main():
     app = (
         Application.builder()
         .token(TOKEN)
-        .proxy_url(proxy_url)
-        .get_updates_proxy_url(proxy_url)
+        .proxy(proxy_url)
+        .get_updates_proxy(proxy_url)
         .build()
     )
     app.add_handler(CommandHandler("start", start))
