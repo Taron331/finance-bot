@@ -2,19 +2,25 @@ import os
 import datetime
 import gspread
 from google.oauth2.service_account import Credentials
+from google.auth.transport.requests import Request
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 TOKEN = "8926455676:AAEmvLB7-D68aFIlK982bnMVeofTiA4gI0Y"
 SPREADSHEET_NAME = "Транзакции"
 
-# Современный способ авторизации через google-auth
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
 ]
 
+# Загрузка учетных данных
 creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+
+# Обновление токена
+request = Request()
+creds.refresh(request)
+
 client = gspread.authorize(creds)
 
 try:
