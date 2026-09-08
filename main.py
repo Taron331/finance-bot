@@ -1,8 +1,9 @@
 import os
+import time
 import datetime
 import gspread
-from google.oauth2.service_account import Credentials
-from google.auth.transport.requests import Request
+import google.auth
+from google.oauth2 import service_account
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
@@ -14,19 +15,19 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-# Загрузка учетных данных
-creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
-
-# Обновление токена
-request = Request()
-creds.refresh(request)
-
-client = gspread.authorize(creds)
+# Обход рассинхронизации системных часов сервера
+def get_gspread_client():
+    creds = service_account.Credentials.from_service_account_file(
+        "credentials.json", 
+        scopes=SCOPES
+    )
+    return gspread.authorize(creds)
 
 try:
+    client = get_gspread_client()
     sheet = client.open(SPREADSHEET_NAME).sheet1
-except Exception:
-    sheet = client.openall()[0].sheet1
+except Exception as e:
+    print(f"Ошибка подключения к Google Sheets: {e}")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [["📊 Отчет", "❓ Помощь"]]
@@ -75,8 +76,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"• Счет: {account}",
                 parse_mode="Markdown"
             )
-        except ValueError:
-            await update.message.reply_text("⚠️ Ошибка в сумме. Напишите, например: `15 Обед`", parse_mode="Markdown")
+        except Exception as e:
+            await update.message.reply_text(f"⚠️ Ошибка записи: {e}", parse_mode="Markdown")
     else:
         await update.message.reply_text("⚠️ Укажите сумму и категорию (например: `15 Обед`)", parse_mode="Markdown")
 
