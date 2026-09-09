@@ -171,17 +171,11 @@
   </div>
 
   <!-- iOS Барабан -->
-  <div class="picker-container" id="pickerBox" onclick="enableManualInput()">
+  <div class="picker-container" id="pickerBox">
     <div class="picker-selection"></div>
-    <div class="wheel" id="wheelInt">
-      <div class="wheel-padding"></div>
-      <div class="wheel-padding"></div>
-    </div>
+    <div class="wheel" id="wheelInt"></div>
     <span style="font-size: 22px; font-weight: bold; margin: 0 4px;">.</span>
-    <div class="wheel" id="wheelDec">
-      <div class="wheel-padding"></div>
-      <div class="wheel-padding"></div>
-    </div>
+    <div class="wheel" id="wheelDec"></div>
     <span style="font-size: 20px; font-weight: bold; margin-left: 8px;">€</span>
   </div>
 
@@ -215,15 +209,36 @@
 
     function initWheels() {
       const wInt = document.getElementById('wheelInt');
+      const wDec = document.getElementById('wheelDec');
+      
+      wInt.innerHTML = '';
+      wDec.innerHTML = '';
+
+      // Создаем отступы сверху
+      const padTop1 = document.createElement('div'); padTop1.className = 'wheel-padding';
+      const padTop2 = document.createElement('div'); padTop2.className = 'wheel-padding';
+      wInt.appendChild(padTop1);
+      wInt.appendChild(padTop2);
+
       for (let i = 0; i <= 1000; i++) {
         const div = document.createElement('div');
         div.className = 'item';
         div.innerText = i;
         wInt.appendChild(div);
       }
-      
-      const wDec = document.getElementById('wheelDec');
-      // Центы от 00 до 99 по 1
+
+      // Отступы снизу
+      const padBot1 = document.createElement('div'); padBot1.className = 'wheel-padding';
+      const padBot2 = document.createElement('div'); padBot2.className = 'wheel-padding';
+      wInt.appendChild(padBot1);
+      wInt.appendChild(padBot2);
+
+      // Центы от 00 до 99
+      const padTop3 = document.createElement('div'); padTop3.className = 'wheel-padding';
+      const padTop4 = document.createElement('div'); padTop4.className = 'wheel-padding';
+      wDec.appendChild(padTop3);
+      wDec.appendChild(padTop4);
+
       for (let i = 0; i < 100; i++) {
         const div = document.createElement('div');
         div.className = 'item';
@@ -231,8 +246,16 @@
         wDec.appendChild(div);
       }
 
-      wInt.parentElement.querySelectorAll('.wheel-padding').forEach(p => wInt.appendChild(p.cloneNode()));
-      wDec.parentElement.querySelectorAll('.wheel-padding').forEach(p => wDec.appendChild(p.cloneNode()));
+      const padBot3 = document.createElement('div'); padBot3.className = 'wheel-padding';
+      const padBot4 = document.createElement('div'); padBot4.className = 'wheel-padding';
+      wDec.appendChild(padBot3);
+      wDec.appendChild(padBot4);
+
+      // Сброс прокрутки строго на 0
+      setTimeout(() => {
+        wInt.scrollTop = 0;
+        wDec.scrollTop = 0;
+      }, 50);
     }
 
     function renderOptions() {
