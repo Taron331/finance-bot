@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Ввод транзакции</title>
+  <title>Контроль финансов</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     :root {
-      --bg-color: var(--tg-theme-bg-color, #f4f4f7);
-      --card-bg: var(--tg-theme-secondary-bg-color, #ffffff);
-      --text-color: var(--tg-theme-text-color, #000000);
-      --button-color: var(--tg-theme-button-color, #007aff);
+      --bg-color: var(--tg-theme-bg-color, #1c1c1e);
+      --card-bg: var(--tg-theme-secondary-bg-color, #2c2c2e);
+      --text-color: var(--tg-theme-text-color, #ffffff);
+      --button-color: var(--tg-theme-button-color, #0a84ff);
       --button-text: var(--tg-theme-button-text-color, #ffffff);
     }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, sans-serif;
       background-color: var(--bg-color);
       color: var(--text-color);
       margin: 0;
@@ -27,12 +27,12 @@
     }
     .segmented-control {
       display: flex;
-      background: rgba(118, 118, 128, 0.12);
+      background: rgba(118, 118, 128, 0.24);
       border-radius: 9px;
       padding: 2px;
       width: 100%;
       max-width: 340px;
-      margin-bottom: 12px;
+      margin-bottom: 16px;
     }
     .segmented-btn {
       flex: 1;
@@ -48,7 +48,7 @@
     }
     .segmented-btn.active {
       background: var(--card-bg);
-      box-shadow: 0px 3px 8px rgba(0, 0, 0, 0.12);
+      box-shadow: 0px 3px 8px rgba(0, 0, 0, 0.3);
     }
     
     /* 3D Барабан */
@@ -63,14 +63,13 @@
       justify-content: center;
       align-items: center;
       gap: 10px;
-      margin-bottom: 10px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      margin-bottom: 12px;
       position: relative;
     }
 
     .picker-column {
       height: 120px;
-      width: 110px;
+      width: 120px;
       overflow-y: scroll;
       scroll-snap-type: y mandatory;
       scrollbar-width: none;
@@ -89,54 +88,48 @@
       height: 40px;
       line-height: 40px;
       text-align: center;
-      font-size: 24px;
+      font-size: 22px;
       font-weight: 700;
       scroll-snap-align: center;
       color: var(--text-color);
       opacity: 0.3;
-      transition: opacity 0.1s;
+      transition: opacity 0.1s, font-size 0.1s;
     }
 
     .picker-item.active {
       opacity: 1;
-      font-size: 28px;
+      font-size: 26px;
     }
 
     .selection-overlay {
       position: absolute;
       width: calc(100% - 32px);
       height: 40px;
-      background: rgba(118, 118, 128, 0.12);
+      background: rgba(118, 118, 128, 0.24);
       border-radius: 8px;
       pointer-events: none;
     }
 
-    .dot-label {
-      font-size: 28px;
+    .dot-label, .currency-label {
+      font-size: 26px;
       font-weight: 700;
       z-index: 2;
     }
 
-    .currency-label {
-      font-size: 24px;
-      font-weight: 600;
-      color: #8e8e93;
-      z-index: 2;
-    }
-
+    /* Поле клавиатуры */
     .input-box {
       width: 100%;
       max-width: 340px;
-      margin-bottom: 12px;
+      margin-bottom: 16px;
     }
 
     .manual-input {
       width: 100%;
       padding: 12px;
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 600;
       text-align: center;
-      border: 1px solid rgba(0, 0, 0, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 10px;
       box-sizing: border-box;
       outline: none;
@@ -172,7 +165,7 @@
     }
     .option-card.selected {
       border-color: var(--button-color);
-      background: rgba(0, 122, 255, 0.05);
+      background: rgba(10, 132, 255, 0.15);
     }
     .save-btn {
       width: 100%;
@@ -196,7 +189,7 @@
     <button class="segmented-btn" id="btnIncome" onclick="setType('Доход')">Доход</button>
   </div>
 
-  <!-- Интерактивный барабан -->
+  <!-- Барабан -->
   <div class="wheel-container">
     <div class="selection-overlay"></div>
     
@@ -217,9 +210,9 @@
     <span class="currency-label">€</span>
   </div>
 
-  <!-- Поле клавиатурного ввода -->
+  <!-- Быстрый ввод клавиатурой -->
   <div class="input-box">
-    <input type="number" step="0.01" inputmode="decimal" class="manual-input" id="manualInput" placeholder="Введите сумму (напр. 140)" oninput="onInputChanged()">
+    <input type="number" step="any" inputmode="decimal" class="manual-input" id="manualInput" placeholder="Или введите сумму" oninput="onInputChanged()">
   </div>
 
   <div class="label-group">Категория</div>
@@ -241,21 +234,16 @@
     let valInt = 0;
     let valDec = 0;
     let isUserTyping = false;
+    let maxIntLimit = 10000;
 
     const categoriesExpense = ["🍔 Еда", "🛒 Продукты", "🚗 Авто", "🏠 Дом", "🎉 Развлечения", "📦 Другое"];
     const categoriesIncome = ["💼 Зарплата", "🎁 Подарок", "💰 Другое"];
     const accounts = ["Карта", "💵 Наличные"];
 
     function initWheels() {
-      const containerInt = document.getElementById('itemsInt');
+      renderIntItems(maxIntLimit);
+
       const containerDec = document.getElementById('itemsDec');
-
-      let htmlInt = '';
-      for (let i = 0; i <= 2000; i++) {
-        htmlInt += `<div class="picker-item" id="item-int-${i}">${i}</div>`;
-      }
-      containerInt.innerHTML = htmlInt;
-
       let htmlDec = '';
       for (let i = 0; i < 100; i++) {
         const str = i.toString().padStart(2, '0');
@@ -267,6 +255,15 @@
       updateHighlight('dec', 0);
     }
 
+    function renderIntItems(maxVal) {
+      const containerInt = document.getElementById('itemsInt');
+      let htmlInt = '';
+      for (let i = 0; i <= maxVal; i++) {
+        htmlInt += `<div class="picker-item" id="item-int-${i}">${i}</div>`;
+      }
+      containerInt.innerHTML = htmlInt;
+    }
+
     function onWheelScroll(type) {
       if (isUserTyping) return;
 
@@ -274,7 +271,7 @@
       const index = Math.round(col.scrollTop / 40);
 
       if (type === 'int') {
-        valInt = Math.min(Math.max(index, 0), 2000);
+        valInt = Math.max(index, 0);
         updateHighlight('int', valInt);
       } else {
         valDec = Math.min(Math.max(index, 0), 99);
@@ -305,8 +302,10 @@
         }
       }
 
-      valInt = Math.min(Math.max(valInt, 0), 2000);
-      valDec = Math.min(Math.max(valDec, 0), 99);
+      if (valInt > maxIntLimit) {
+        maxIntLimit = valInt + 1000;
+        renderIntItems(maxIntLimit);
+      }
 
       document.getElementById('colInt').scrollTop = valInt * 40;
       document.getElementById('colDec').scrollTop = valDec * 40;
@@ -314,18 +313,17 @@
       updateHighlight('int', valInt);
       updateHighlight('dec', valDec);
 
-      setTimeout(() => { isUserTyping = false; }, 100);
+      setTimeout(() => { isUserTyping = false; }, 50);
     }
 
     function updateHighlight(type, val) {
-      const max = type === 'int' ? 2000 : 99;
-      for (let i = 0; i <= max; i++) {
-        const item = document.getElementById(`item-${type}-${i}`);
-        if (item) {
-          if (i === val) {
-            item.classList.add('active');
-          } else {
-            item.classList.remove('active');
+      const max = type === 'int' ? maxIntLimit : 99;
+      for (let i = val - 2; i <= val + 2; i++) {
+        if (i >= 0 && i <= max) {
+          const item = document.getElementById(`item-${type}-${i}`);
+          if (item) {
+            if (i === val) item.classList.add('active');
+            else item.classList.remove('active');
           }
         }
       }
