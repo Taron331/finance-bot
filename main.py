@@ -2,10 +2,13 @@ import os
 import logging
 import asyncio
 import threading
+import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import gspread
+from google.oauth2.service_account import Credentials
+import google.auth.transport.requests
 
 # Настройка логирования
 logging.basicConfig(
@@ -15,6 +18,7 @@ logging.basicConfig(
 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 SPREADSHEET_NAME = os.environ.get("SPREADSHEET_NAME", "Finance")
+
 
 # --- 1. Легкий HTTP-сервер для Health Check на Render ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
@@ -28,11 +32,10 @@ def start_health_check_server():
     server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
     server.serve_forever()
 
-# Запускаем фоновый поток сервера сразу при старте файла
 threading.Thread(target=start_health_check_server, daemon=True).start()
 
 
-# --- 2. Функция подключения к Google Таблице из файла creds.json ---
+# --- 2. Функция подключения к Google Таблице с компенсацией часов ---
 def get_sheet():
     try:
         if not os.path.exists("creds.json"):
@@ -43,7 +46,15 @@ def get_sheet():
             'https://www.googleapis.com/auth/drive'
         ]
 
-        gc = gspread.service_account(filename="creds.json", scopes=scopes)
+        # Загружаем Credentials из файла
+        credentials = Credentials.from_service_account_file("creds.json", scopes=scopes)
+
+        # ФИКС ЧАСОВ (Clock Skew): смещаем время создания токена на 60 секунд назад
+        request = google.auth.transport.requests.Request()
+        credentials._time_creation = time.time() - 60
+        credentials.refresh(request)
+
+        gc = gspread.authorize(credentials)
         sheet = gc.open(SPREADSHEET_NAME).sheet1
         return sheet, None
 
@@ -78,7 +89,6 @@ def main():
         print("ОШИБКА: Переменная TELEGRAM_BOT_TOKEN не задана в Environment Variables!")
         return
 
-    # Явная инициализация event loop для стабильной работы на Render
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
