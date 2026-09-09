@@ -2,20 +2,20 @@ import logging
 import json
 import datetime
 import gspread
-from telegram import Update, WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 BOT_TOKEN = "8926455676:AAEmvLB7-D68aFIlK982bnMVeofTiA4gI0Y"
 WEBAPP_URL = "https://taron331.github.io/finance-bot/"
 CREDENTIALS_FILE = "credentials.json"
-SPREADSHEET_NAME = "Учет финансов"  # Укажите точное название вашей Google Таблицы
+SPREADSHEET_NAME = "Контроль финансов"  # Укажите точное название вашей Google Таблицы
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
-# Подключение к Google Таблицам
+# Функция подключения к Google Таблице
 def get_sheet():
     try:
         gc = gspread.service_account(filename=CREDENTIALS_FILE)
@@ -24,14 +24,18 @@ def get_sheet():
         logging.error(f"Ошибка подключения к Google Таблице: {e}")
         return None
 
+# Главное меню — постоянные кнопки внизу экрана
+def get_main_keyboard():
+    keyboard = [
+        [KeyboardButton("➕ Добавить транзакцию", web_app=WebAppInfo(url=WEBAPP_URL))],
+        [KeyboardButton("📊 Отчет по месяцам"), KeyboardButton("🗑 Удалить последнюю запись")]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕ Добавить транзакцию", web_app=WebAppInfo(url=WEBAPP_URL))],
-        [InlineKeyboardButton("📊 Отчет по месяцам", callback_data="report_months")]
-    ])
     await update.message.reply_text(
-        "Привет! Нажмите на кнопку ниже, чтобы зафиксировать расход/доход или посмотреть отчет:",
-        reply_markup=keyboard
+        "Привет! Используйте меню ниже для записи доходов/расходов, просмотра отчета или удаления последней записи:",
+        reply_markup=get_main_keyboard()
     )
 
 async def web_app_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -46,7 +50,6 @@ async def web_app_data_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         now = datetime.datetime.now()
         date_str = now.strftime("%Y-%m-%d %H:%M:%S")
 
-        # Запись в Google Таблицу
         sheet = get_sheet()
         if sheet:
             sheet.append_row([date_str, trans_type, category, amount, account])
@@ -65,35 +68,22 @@ async def web_app_data_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             f"<i>{saved_status}</i>"
         )
 
-        await update.message.reply_text(message, parse_mode="HTML")
+        await update.message.reply_text(message, parse_mode="HTML", reply_markup=get_main_keyboard())
 
     except Exception as e:
-        await update.message.reply_text(f"Ошибка при обработке данных: {e}")
+        await update.message.reply_text(f"Ошибка при обработке данных: {e}", reply_markup=get_main_keyboard())
 
 async def monthly_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query if update.callback_query else None
-    if query:
-        await query.answer()
-
     sheet = get_sheet()
     if not sheet:
-        msg = "⚠️ Не удалось подключиться к Google Таблице."
-        if query:
-            await query.message.reply_text(msg)
-        else:
-            await update.message.reply_text(msg)
+        await update.message.reply_text("⚠️ Не удалось подключиться к Google Таблице.", reply_markup=get_main_keyboard())
         return
 
     records = sheet.get_all_values()
     if len(records) <= 1:
-        msg = "ℹ️ В таблице пока нет сохраненных транзакций."
-        if query:
-            await query.message.reply_text(msg)
-        else:
-            await update.message.reply_text(msg)
+        await update.message.reply_text("ℹ️ В таблице пока нет сохраненных транзакций.", reply_markup=get_main_keyboard())
         return
 
-    # Группировка транзакций по месяцам (ГГГГ-ММ)
     summary = {}
     for row in records[1:]:  # пропускаем заголовок
         if len(row) < 4:
@@ -112,6 +102,10 @@ async def monthly_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except ValueError:
             continue
 
+    if not summary:
+        await update.message.reply_text("ℹ️ Не найдено корректных записей для отчета.", reply_markup=get_main_keyboard())
+        return
+
     text = "📊 <b>Отчет по месяцам:</b>\n\n"
     for month in sorted(summary.keys(), reverse=True):
         expense = summary[month]["Расход"]
@@ -124,10 +118,39 @@ async def monthly_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"  ⚖️ Баланс: <code>{balance:+.2f} €</code>\n\n"
         )
 
-    if query:
-        await query.message.reply_text(text, parse_mode="HTML")
-    else:
-        await update.message.reply_text(text, parse_mode="HTML")
+    await update.message.reply_text(text, parse_mode="HTML", reply_markup=get_main_keyboard())
+
+async def delete_last_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    sheet = get_sheet()
+    if not sheet:
+        await update.message.reply_text("⚠️ Не удалось подключиться к Google Таблице.", reply_markup=get_main_keyboard())
+        return
+
+    records = sheet.get_all_values()
+    if len(records) <= 1:
+        await update.message.reply_text("ℹ️ В таблице нет транзакций для удаления.", reply_markup=get_main_keyboard())
+        return
+
+    last_row_index = len(records)
+    last_row_data = records[-1]
+
+    # Удаляем последнюю строку в Google Таблице
+    sheet.delete_rows(last_row_index)
+
+    date_str = last_row_data[0] if len(last_row_data) > 0 else ""
+    trans_type = last_row_data[1] if len(last_row_data) > 1 else ""
+    category = last_row_data[2] if len(last_row_data) > 2 else ""
+    amount = last_row_data[3] if len(last_row_data) > 3 else ""
+
+    msg = (
+        f"🗑 <b>Удалена последняя запись:</b>\n\n"
+        f"<b>Дата:</b> {date_str}\n"
+        f"<b>Тип:</b> {trans_type}\n"
+        f"<b>Категория:</b> {category}\n"
+        f"<b>Сумма:</b> {amount} €"
+    )
+
+    await update.message.reply_text(msg, parse_mode="HTML", reply_markup=get_main_keyboard())
 
 def main():
     app = (
@@ -143,10 +166,13 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("report", monthly_report))
-    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, web_app_data_handler))
     
-    from telegram.ext import CallbackQueryHandler
-    app.add_handler(CallbackQueryHandler(monthly_report, pattern="^report_months$"))
+    # Обработчики текстовых кнопок снизу
+    app.add_handler(MessageHandler(filters.Regex("^📊 Отчет по месяцам$"), monthly_report))
+    app.add_handler(MessageHandler(filters.Regex("^🗑 Удалить последнюю запись$"), delete_last_entry))
+    
+    # Обработчик данных из WebApp
+    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, web_app_data_handler))
 
     print("Бот успешно запущен...")
     app.run_polling(bootstrap_retries=-1, timeout=30)
