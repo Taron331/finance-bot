@@ -3,14 +3,22 @@ import datetime
 import gspread
 from google.oauth2 import service_account
 from telegram import Update, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-    filters,
+from telegram.ext import ApplicationBuilder
+
+# Увеличиваем таймауты подключения и чтения до 30 секунд
+app = (
+    ApplicationBuilder()
+    .token("ВАШ_ТОКЕН_БОТА")
+    .connect_timeout(30.0)
+    .read_timeout(30.0)
+    .write_timeout(30.0)
+    .get_updates_connect_timeout(30.0)
+    .get_updates_read_timeout(30.0)
+    .build()
 )
+
+if __name__ == '__main__':
+    app.run_polling()
 
 TOKEN = "8926455676:AAEmvLB7-D68aFIlK982bnMVeofTiA4gI0Y"
 SPREADSHEET_NAME = "Транзакции"
