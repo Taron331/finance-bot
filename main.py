@@ -13,7 +13,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8926455676:AAEmvLB7-D68aFIlK982bnMVeofTiA4gI0Y")
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8926455676:AAEmvLB7-D68aFI1K982bnMVeofTiA4gI0Y")
 SPREADSHEET_NAME = os.environ.get("SPREADSHEET_NAME", "Finance")
 CREDENTIALS_FILE = "credentials.json"
 
