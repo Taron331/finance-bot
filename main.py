@@ -7,7 +7,6 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import gspread
 from google.oauth2.service_account import Credentials
-import google.auth.transport.requests
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -35,14 +34,12 @@ def get_sheet():
     try:
         creds_raw = os.environ.get("GOOGLE_CREDS")
         if not creds_raw:
-            return None, "Переменная GOOGLE_CREDS не найдена"
+            return None, "Переменная GOOGLE_CREDS не найдена в Railway Variables"
 
         creds_data = json.loads(creds_raw)
 
         if "private_key" in creds_data:
-            pk = creds_data["private_key"]
-            pk = pk.replace("\\\\n", "\n").replace("\\n", "\n")
-            creds_data["private_key"] = pk
+            creds_data["private_key"] = creds_data["private_key"].replace("\\n", "\n")
 
         scopes = [
             'https://www.googleapis.com/auth/spreadsheets',
@@ -50,10 +47,6 @@ def get_sheet():
         ]
 
         credentials = Credentials.from_service_account_info(creds_data, scopes=scopes)
-        
-        request = google.auth.transport.requests.Request()
-        credentials.refresh(request)
-
         gc = gspread.authorize(credentials)
         sheet = gc.open(SPREADSHEET_NAME).sheet1
         return sheet, None
