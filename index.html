@@ -53,7 +53,7 @@
       position: relative;
       width: 100%;
       max-width: 340px;
-      height: 170px;
+      height: 160px;
       background: var(--card-bg);
       border-radius: 14px;
       display: flex;
@@ -74,6 +74,7 @@
       border-bottom: 1px solid rgba(0, 122, 255, 0.3);
       border-radius: 8px;
       pointer-events: none;
+      z-index: 2;
     }
     .wheel {
       height: 100%;
@@ -81,9 +82,10 @@
       overflow-y: scroll;
       scroll-snap-type: y mandatory;
       scrollbar-width: none;
+      z-index: 1;
     }
     .wheel::-webkit-scrollbar { display: none; }
-    .wheel-padding { height: 65px; }
+    .wheel-padding { height: 60px; }
     .item {
       height: 40px;
       display: flex;
@@ -92,6 +94,7 @@
       font-size: 20px;
       font-weight: 600;
       scroll-snap-align: center;
+      box-sizing: border-box;
     }
     .manual-link {
       font-size: 13px;
@@ -174,16 +177,16 @@
   <div class="picker-container" id="pickerBox">
     <div class="picker-selection"></div>
     <div class="wheel" id="wheelInt"></div>
-    <span style="font-size: 22px; font-weight: bold; margin: 0 4px;">.</span>
+    <span style="font-size: 22px; font-weight: bold; margin: 0 4px; z-index:2;">.</span>
     <div class="wheel" id="wheelDec"></div>
-    <span style="font-size: 20px; font-weight: bold; margin-left: 8px;">€</span>
+    <span style="font-size: 20px; font-weight: bold; margin-left: 8px; z-index:2;">€</span>
   </div>
 
   <div class="manual-link" id="manualToggleBtn" onclick="toggleInputMode()">✏️ Ввести точно вручную</div>
 
   <!-- Поле ручного ввода -->
   <div class="manual-input-box" id="manualBox">
-    <input type="number" step="0.01" class="manual-input" id="numInput" placeholder="0.00" oninput="syncFromInput()">
+    <input type="number" step="0.01" class="manual-input" id="numInput" placeholder="0.00">
   </div>
 
   <div class="label-group">Категория</div>
@@ -214,48 +217,43 @@
       wInt.innerHTML = '';
       wDec.innerHTML = '';
 
-      // Создаем отступы сверху
-      const padTop1 = document.createElement('div'); padTop1.className = 'wheel-padding';
-      const padTop2 = document.createElement('div'); padTop2.className = 'wheel-padding';
-      wInt.appendChild(padTop1);
-      wInt.appendChild(padTop2);
+      // Верхний padding
+      const padTopInt = document.createElement('div'); padTopInt.className = 'wheel-padding';
+      wInt.appendChild(padTopInt);
 
-      for (let i = 0; i <= 1000; i++) {
+      for (let i = 0; i <= 500; i++) {
         const div = document.createElement('div');
         div.className = 'item';
+        div.setAttribute('data-val', i);
         div.innerText = i;
         wInt.appendChild(div);
       }
 
-      // Отступы снизу
-      const padBot1 = document.createElement('div'); padBot1.className = 'wheel-padding';
-      const padBot2 = document.createElement('div'); padBot2.className = 'wheel-padding';
-      wInt.appendChild(padBot1);
-      wInt.appendChild(padBot2);
+      // Нижний padding
+      const padBotInt = document.createElement('div'); padBotInt.className = 'wheel-padding';
+      wInt.appendChild(padBotInt);
 
       // Центы от 00 до 99
-      const padTop3 = document.createElement('div'); padTop3.className = 'wheel-padding';
-      const padTop4 = document.createElement('div'); padTop4.className = 'wheel-padding';
-      wDec.appendChild(padTop3);
-      wDec.appendChild(padTop4);
+      const padTopDec = document.createElement('div'); padTopDec.className = 'wheel-padding';
+      wDec.appendChild(padTopDec);
 
       for (let i = 0; i < 100; i++) {
         const div = document.createElement('div');
         div.className = 'item';
-        div.innerText = i.toString().padStart(2, '0');
+        const strVal = i.toString().padStart(2, '0');
+        div.setAttribute('data-val', strVal);
+        div.innerText = strVal;
         wDec.appendChild(div);
       }
 
-      const padBot3 = document.createElement('div'); padBot3.className = 'wheel-padding';
-      const padBot4 = document.createElement('div'); padBot4.className = 'wheel-padding';
-      wDec.appendChild(padBot3);
-      wDec.appendChild(padBot4);
+      const padBotDec = document.createElement('div'); padBotDec.className = 'wheel-padding';
+      wDec.appendChild(padBotDec);
 
-      // Сброс прокрутки строго на 0
+      // Сброс прокрутки ровно на 0
       setTimeout(() => {
         wInt.scrollTop = 0;
         wDec.scrollTop = 0;
-      }, 50);
+      }, 100);
     }
 
     function renderOptions() {
@@ -306,7 +304,7 @@
 
       if (isManualMode) {
         mBox.style.display = 'block';
-        pBox.style.opacity = '0.4';
+        pBox.style.opacity = '0.3';
         btn.innerText = '🛞 Вернуться к барабану';
         const curAmt = getWheelAmount();
         document.getElementById('numInput').value = curAmt > 0 ? curAmt : '';
@@ -318,31 +316,32 @@
       }
     }
 
+    function getCenteredItemValue(wheelId) {
+      const wheel = document.getElementById(wheelId);
+      const items = wheel.querySelectorAll('.item');
+      const wheelRect = wheel.getBoundingClientRect();
+      const centerY = wheelRect.top + wheelRect.height / 2;
+
+      let closestItem = null;
+      let minDiff = Infinity;
+
+      items.forEach(item => {
+        const rect = item.getBoundingClientRect();
+        const itemCenterY = rect.top + rect.height / 2;
+        const diff = Math.abs(centerY - itemCenterY);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestItem = item;
+        }
+      });
+
+      return closestItem ? closestItem.getAttribute('data-val') : "0";
+    }
+
     function getWheelAmount() {
-      const wInt = document.getElementById('wheelInt');
-      const wDec = document.getElementById('wheelDec');
-      const intIdx = Math.round(wInt.scrollTop / 40);
-      const decIdx = Math.round(wDec.scrollTop / 40);
-      return (intIdx + (decIdx / 100)).toFixed(2);
-    }
-
-    function setWheelAmount(val) {
-      const parts = val.toFixed(2).split('.');
-      const intVal = parseInt(parts[0]) || 0;
-      const decVal = parseInt(parts[1]) || 0;
-
-      const wInt = document.getElementById('wheelInt');
-      const wDec = document.getElementById('wheelDec');
-      
-      wInt.scrollTop = intVal * 40;
-      wDec.scrollTop = decVal * 40;
-    }
-
-    function syncFromInput() {
-      const val = parseFloat(document.getElementById('numInput').value);
-      if (!isNaN(val)) {
-        setWheelAmount(val);
-      }
+      const intVal = getCenteredItemValue('wheelInt');
+      const decVal = getCenteredItemValue('wheelDec');
+      return (parseFloat(intVal) + parseFloat(decVal) / 100).toFixed(2);
     }
 
     function sendData() {
@@ -353,7 +352,7 @@
         amount = parseFloat(getWheelAmount());
       }
 
-      if (!amount || amount <= 0) {
+      if (isNaN(amount) || amount <= 0) {
         tg.showAlert("Пожалуйста, введите или выберите сумму больше 0");
         return;
       }
