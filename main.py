@@ -3,6 +3,7 @@ import json
 import datetime
 import os
 import threading
+import html
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import gspread
 from telegram import Update, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup
@@ -11,14 +12,14 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 BOT_TOKEN = "8926455676:AAEmvLB7-D68aFIlK982bnMVeofTiA4gI0Y"
 WEBAPP_URL = "https://taron331.github.io/finance-bot/"
 CREDENTIALS_FILE = "credentials.json"
-SPREADSHEET_NAME = "Контроль финансов"  # Название вашей Google Таблицы
+SPREADSHEET_NAME = "Контроль финансов"
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
-# --- ФОНОВЫЙ HTTP-СЕРВЕР ДЛЯ RENDER (обязателен для Web Service) ---
+# --- ФОНОВЫЙ HTTP-СЕРВЕР ДЛЯ RENDER ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -30,14 +31,11 @@ def start_health_check_server():
     server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
     server.serve_forever()
 
-# Запускаем сервер в фоновом режиме перед стартом бота
 threading.Thread(target=start_health_check_server, daemon=True).start()
-# -----------------------------------------------------------------
+# -------------------------------------
 
-# Функция подключения к Google Таблице с пересозданием сессии
 def get_sheet():
     try:
-        # Проверяем, существует ли файл перед подключением
         if not os.path.exists(CREDENTIALS_FILE):
             return None, f"Файл {CREDENTIALS_FILE} не найден в директории проекта!"
         gc = gspread.service_account(filename=CREDENTIALS_FILE)
@@ -46,7 +44,6 @@ def get_sheet():
         logging.error(f"Ошибка подключения к Google Таблице: {e}")
         return None, str(e)
 
-# Постоянная Reply-клавиатура внизу экрана
 def get_main_keyboard():
     keyboard = [
         [KeyboardButton("➕ Добавить транзакцию", web_app=WebAppInfo(url=WEBAPP_URL))],
@@ -82,11 +79,11 @@ async def web_app_data_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
         sheet, err_msg = get_sheet()
         if sheet:
-            # Записываем с колонкой "Пользователь" (Столбец F)
             sheet.append_row([date_str, trans_type, category, amount, account, user_display])
             saved_status = "✅ Сохранено в Google Таблицу!"
         else:
-            saved_status = f"⚠️ Ошибка доступа к Таблице:\n<code>{err_msg}</code>"
+            safe_err = html.escape(str(err_msg))
+            saved_status = f"⚠️ Ошибка доступа к Таблице:\n<code>{safe_err}</code>"
 
         icon = "🔴" if trans_type == "Расход" else "🟢"
 
@@ -103,12 +100,14 @@ async def web_app_data_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text(message, parse_mode="HTML", reply_markup=get_main_keyboard())
 
     except Exception as e:
-        await update.message.reply_text(f"Ошибка при обработке данных: {e}", reply_markup=get_main_keyboard())
+        safe_e = html.escape(str(e))
+        await update.message.reply_text(f"Ошибка при обработке данных: <code>{safe_e}</code>", parse_mode="HTML", reply_markup=get_main_keyboard())
 
 async def monthly_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sheet, err_msg = get_sheet()
     if not sheet:
-        await update.message.reply_text(f"⚠️ Ошибка подключения к Таблице:\n<code>{err_msg}</code>", parse_mode="HTML", reply_markup=get_main_keyboard())
+        safe_err = html.escape(str(err_msg))
+        await update.message.reply_text(f"⚠️ Ошибка подключения к Таблице:\n<code>{safe_err}</code>", parse_mode="HTML", reply_markup=get_main_keyboard())
         return
 
     records = sheet.get_all_values()
@@ -201,12 +200,13 @@ async def custom_date_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
         else:
             end_date = start_date
     except ValueError:
-        await update.message.reply_text("⚠️ Ошибка формата даты. Используйте формат: <code>ДД.ММ.ГГГГ</code> (например, <code>01.08.2026</code>)", parse_mode="HTML")
+        await update.message.reply_text("⚠️ Ошибка формата даты. Используйте формат: <code>ДД.ММ.ГГГГ</code>", parse_mode="HTML")
         return
 
     sheet, err_msg = get_sheet()
     if not sheet:
-        await update.message.reply_text(f"⚠️ Ошибка доступа к Таблице:\n<code>{err_msg}</code>", parse_mode="HTML")
+        safe_err = html.escape(str(err_msg))
+        await update.message.reply_text(f"⚠️ Ошибка доступа к Таблице:\n<code>{safe_err}</code>", parse_mode="HTML", reply_markup=get_main_keyboard())
         return
 
     records = sheet.get_all_values()
@@ -244,7 +244,7 @@ async def custom_date_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
             continue
 
     if not users_data:
-        await update.message.reply_text(f"ℹ️ За период с {start_date.strftime('%d.%m.%Y')} по {end_date.strftime('%d.%m.%Y')} записей не найдено.", reply_markup=get_main_keyboard())
+        await update.message.reply_text(f"ℹ️ За выбранный период записей не найдено.", reply_markup=get_main_keyboard())
         return
 
     balance = total_inc - total_exp
@@ -272,7 +272,8 @@ async def custom_date_report(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def delete_last_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sheet, err_msg = get_sheet()
     if not sheet:
-        await update.message.reply_text(f"⚠️ Ошибка подключения к Таблице:\n<code>{err_msg}</code>", parse_mode="HTML", reply_markup=get_main_keyboard())
+        safe_err = html.escape(str(err_msg))
+        await update.message.reply_text(f"⚠️ Ошибка подключения к Таблице:\n<code>{safe_err}</code>", parse_mode="HTML", reply_markup=get_main_keyboard())
         return
 
     records = sheet.get_all_values()
@@ -324,7 +325,6 @@ def main():
 
     print("Бот успешно запущен...")
     
-    # Принудительно создаем и устанавливаем event loop для Python 3.14+
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
@@ -332,5 +332,6 @@ def main():
         asyncio.set_event_loop(loop)
 
     app.run_polling(bootstrap_retries=-1, timeout=30)
+
 if __name__ == '__main__':
     main()
