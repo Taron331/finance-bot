@@ -8,7 +8,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 BOT_TOKEN = "8926455676:AAEmvLB7-D68aFIlK982bnMVeofTiA4gI0Y"
 WEBAPP_URL = "https://taron331.github.io/finance-bot/"
 CREDENTIALS_FILE = "credentials.json"
-SPREADSHEET_NAME = "Контроль финансов"  # Укажите точное название вашей Google Таблицы
+SPREADSHEET_NAME = "Учет финансов"  # Укажите точное название вашей Google Таблицы
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
