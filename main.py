@@ -7,7 +7,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 BOT_TOKEN = "8926455676:AAEmvLB7-D68aFIlK982bnMVeofTiA4gI0Y"
 
 # Ссылка на ваше веб-приложение (укажите ссылку на GitHub Pages)
-WEBAPP_URL = "https://ваш_логин.github.io/ваша_папка/"
+WEBAPP_URL = "https://github.com/Taron331/finance-bot"
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
