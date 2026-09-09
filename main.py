@@ -6,9 +6,6 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 BOT_TOKEN = "8926455676:AAEmvLB7-D68aFIlK982bnMVeofTiA4gI0Y"
 WEBAPP_URL = "https://taron331.github.io/finance-bot/"
 
-# Явное указание прокси PythonAnywhere для стабильного соединения
-PROXY_URL = "http://proxy.server:3128"
-
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -51,8 +48,6 @@ def main():
     app = (
         ApplicationBuilder()
         .token(BOT_TOKEN)
-        .proxy_url(PROXY_URL)
-        .get_updates_proxy_url(PROXY_URL)
         .connect_timeout(30.0)
         .read_timeout(30.0)
         .write_timeout(30.0)
@@ -64,7 +59,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, web_app_data_handler))
 
-    print("Бот запущен с настройками прокси PythonAnywhere...")
+    print("Бот успешно запущен...")
     app.run_polling(bootstrap_retries=-1, timeout=30)
 
 if __name__ == '__main__':
