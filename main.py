@@ -84,7 +84,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def main():
-    token = os.environ.get("TELEGRAM_BOT_TOKEN", BOT_TOKEN)
+    token = os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("BOT_TOKEN") or "8926455676:AAEmvLB7-D68aFIlK982bnMVeofTiA4gI0Y"
+    token = token.strip().strip('"').strip("'")
+    
     application = Application.builder().token(token).build()
 
     application.add_handler(CommandHandler("start", start))
@@ -92,7 +94,6 @@ def main():
 
     print("Бот успешно запущен...")
     application.run_polling()
-
 
 if __name__ == '__main__':
     main()
