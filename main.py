@@ -303,6 +303,8 @@ async def delete_last_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, parse_mode="HTML", reply_markup=get_main_keyboard())
 
 def main():
+    import asyncio
+
     app = (
         ApplicationBuilder()
         .token(BOT_TOKEN)
@@ -321,7 +323,14 @@ def main():
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, web_app_data_handler))
 
     print("Бот успешно запущен...")
-    app.run_polling(bootstrap_retries=-1, timeout=30)
+    
+    # Принудительно создаем и устанавливаем event loop для Python 3.14+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
+    app.run_polling(bootstrap_retries=-1, timeout=30)
 if __name__ == '__main__':
     main()
