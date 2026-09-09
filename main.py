@@ -5,10 +5,9 @@ import asyncio
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# --- ГЛОБАЛЬНЫЙ ХАК ВРЕМЕНИ ДЛЯ GOOGLE AUTH ---
-# Отматываем системные часы на 20 секунд назад для всех запросов Python.
-# Это гарантирует, что Google считает JWT-подпись созданной в прошлом,
-# и ликвидирует ошибку 'Invalid JWT Signature' раз и навсегда.
+# --- 1. ФИКС ЧАСОВ ДЛЯ GOOGLE AUTH ---
+# Корректируем системное время на 20 секунд назад, чтобы Google
+# не отвергал JWT-подпись из-за рассинхронизации часов Render.
 _original_time = time.time
 time.time = lambda: _original_time() - 20
 
@@ -17,7 +16,6 @@ from google.oauth2 import service_account
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -27,7 +25,7 @@ BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 SPREADSHEET_NAME = os.environ.get("SPREADSHEET_NAME", "Finance")
 
 
-# --- 1. Легкий HTTP-сервер для Health Check на Render ---
+# --- 2. HTTP-Сервер для поддержания активности на Render ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -39,22 +37,20 @@ def start_health_check_server():
     server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
     server.serve_forever()
 
-# Запускаем фоновый поток веб-сервера
 threading.Thread(target=start_health_check_server, daemon=True).start()
 
 
-# --- 2. Функция подключения к Google Таблице из creds.json ---
+# --- 3. Авторизация в Google Таблице через файл creds.json ---
 def get_sheet():
     try:
         if not os.path.exists("creds.json"):
-            return None, "Файл creds.json не найден в корне проекта!"
+            return None, "Ошибка: Файл creds.json не найден в корне проекта!"
 
         scopes = [
             'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive'
         ]
 
-        # Подгружаем файл авторизации
         credentials = service_account.Credentials.from_service_account_file(
             "creds.json",
             scopes=scopes
@@ -70,7 +66,7 @@ def get_sheet():
         return None, err_msg
 
 
-# --- 3. Обработчики команд Telegram ---
+# --- 4. Обработка команд Telegram ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Бот запущен и готов к работе!")
 
@@ -89,13 +85,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"Ошибка при чтении данных: {e}")
 
 
-# --- 4. Точка входа ---
+# --- 5. Главный цикл ---
 def main():
     if not BOT_TOKEN:
         print("ОШИБКА: TELEGRAM_BOT_TOKEN не задан в Environment Variables!")
         return
 
-    # Принудительно устанавливаем event loop для стабильности на Render
+    # Задаем Event Loop для Python 3.10+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
@@ -104,7 +100,7 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("Бот успешно запущен и ожидает сообщений...")
+    print("Бот успешно запущен...")
     application.run_polling(close_loop=False)
 
 
