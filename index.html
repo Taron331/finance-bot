@@ -51,87 +51,39 @@
       box-shadow: 0px 3px 8px rgba(0, 0, 0, 0.3);
     }
     
-    /* Облегченный барабан */
-    .wheel-container {
+    /* Дисплей суммы в стиле iOS */
+    .amount-display-card {
       width: 100%;
       max-width: 340px;
       background: var(--card-bg);
       border-radius: 14px;
-      padding: 10px 16px;
+      padding: 16px;
       box-sizing: border-box;
       display: flex;
       justify-content: center;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 12px;
-      position: relative;
-    }
-
-    .picker-column {
-      height: 120px;
-      width: 120px;
-      overflow-y: scroll;
-      scroll-snap-type: y mandatory;
-      scrollbar-width: none;
-      -ms-overflow-style: none;
-      position: relative;
-      -webkit-overflow-scrolling: touch;
-    }
-    .picker-column::-webkit-scrollbar {
-      display: none;
-    }
-
-    .picker-spacer {
-      height: 40px;
-    }
-
-    .picker-item {
-      height: 40px;
-      line-height: 40px;
-      text-align: center;
-      font-size: 22px;
-      font-weight: 700;
-      scroll-snap-align: center;
-      color: var(--text-color);
-      opacity: 0.3;
-      transition: opacity 0.1s;
-    }
-
-    .picker-item.active {
-      opacity: 1;
-      font-size: 26px;
-    }
-
-    .selection-overlay {
-      position: absolute;
-      width: calc(100% - 32px);
-      height: 40px;
-      background: rgba(118, 118, 128, 0.24);
-      border-radius: 8px;
-      pointer-events: none;
-    }
-
-    .dot-label, .currency-label {
-      font-size: 26px;
-      font-weight: 700;
-      z-index: 2;
-    }
-
-    /* Ввод клавиатуры */
-    .input-box {
-      width: 100%;
-      max-width: 340px;
+      align-items: baseline;
+      gap: 6px;
       margin-bottom: 16px;
+    }
+    .amount-val {
+      font-size: 38px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    .currency-symbol {
+      font-size: 28px;
+      font-weight: 600;
+      color: #8e8e93;
     }
 
     .manual-input {
       width: 100%;
       padding: 12px;
-      font-size: 20px;
-      font-weight: 600;
+      font-size: 22px;
+      font-weight: 700;
       text-align: center;
       border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 10px;
+      border-radius: 12px;
       box-sizing: border-box;
       outline: none;
       background: var(--card-bg);
@@ -190,30 +142,9 @@
     <button class="segmented-btn" id="btnIncome" onclick="setType('Доход')">Доход</button>
   </div>
 
-  <!-- Облегченный барабан -->
-  <div class="wheel-container">
-    <div class="selection-overlay"></div>
-    
-    <div class="picker-column" id="colInt" onscroll="onWheelScroll('int')">
-      <div class="picker-spacer"></div>
-      <div id="itemsInt"></div>
-      <div class="picker-spacer"></div>
-    </div>
-
-    <span class="dot-label">.</span>
-
-    <div class="picker-column" id="colDec" onscroll="onWheelScroll('dec')">
-      <div class="picker-spacer"></div>
-      <div id="itemsDec"></div>
-      <div class="picker-spacer"></div>
-    </div>
-
-    <span class="currency-label">€</span>
-  </div>
-
-  <!-- Поле клавиатурного ввода -->
-  <div class="input-box">
-    <input type="number" step="any" inputmode="decimal" class="manual-input" id="manualInput" placeholder="Введите сумму (напр. 800)" oninput="onInputChanged()">
+  <!-- Ввод суммы -->
+  <div style="width: 100%; max-width: 340px; margin-bottom: 16px;">
+    <input type="number" step="any" inputmode="decimal" class="manual-input" id="manualInput" placeholder="0 €" oninput="updateDisplay()">
   </div>
 
   <div class="label-group">Категория</div>
@@ -232,107 +163,9 @@
     let selectedCategory = "";
     let selectedAccount = "Карта";
 
-    let valInt = 0;
-    let valDec = 0;
-    let isUserTyping = false;
-
     const categoriesExpense = ["🍔 Еда", "🛒 Продукты", "🚗 Авто", "🏠 Дом", "🎉 Развлечения", "📦 Другое"];
     const categoriesIncome = ["💼 Зарплата", "🎁 Подарок", "💰 Другое"];
     const accounts = ["Карта", "💵 Наличные"];
-
-    function initWheels() {
-      renderWindowInt(0);
-
-      const containerDec = document.getElementById('itemsDec');
-      let htmlDec = '';
-      for (let i = 0; i < 100; i++) {
-        const str = i.toString().padStart(2, '0');
-        htmlDec += `<div class="picker-item" id="item-dec-${i}">${str}</div>`;
-      }
-      containerDec.innerHTML = htmlDec;
-
-      updateHighlight('dec', 0);
-    }
-
-    // Динамический рендер только видимых элементов около текущего числа (без зависаний)
-    function renderWindowInt(centerVal) {
-      const containerInt = document.getElementById('itemsInt');
-      let htmlInt = '';
-      const start = Math.max(0, centerVal - 100);
-      const end = centerVal + 100;
-
-      for (let i = start; i <= end; i++) {
-        htmlInt += `<div class="picker-item ${i === centerVal ? 'active' : ''}" id="item-int-${i}">${i}</div>`;
-      }
-      containerInt.innerHTML = htmlInt;
-    }
-
-    function onWheelScroll(type) {
-      if (isUserTyping) return;
-
-      const col = type === 'int' ? document.getElementById('colInt') : document.getElementById('colDec');
-      const index = Math.round(col.scrollTop / 40);
-
-      if (type === 'int') {
-        const items = document.querySelectorAll('#itemsInt .picker-item');
-        if (items[index]) {
-          valInt = parseInt(items[index].innerText, 10);
-          items.forEach(it => it.classList.remove('active'));
-          items[index].classList.add('active');
-        }
-      } else {
-        valDec = Math.min(Math.max(index, 0), 99);
-        updateHighlight('dec', valDec);
-      }
-
-      const decStr = valDec.toString().padStart(2, '0');
-      document.getElementById('manualInput').value = `${valInt}.${decStr}`;
-    }
-
-    function onInputChanged() {
-      isUserTyping = true;
-      const val = document.getElementById('manualInput').value.trim().replace(',', '.');
-
-      if (val === '') {
-        valInt = 0;
-        valDec = 0;
-      } else {
-        const parts = val.split('.');
-        valInt = parseInt(parts[0], 10) || 0;
-        
-        if (parts.length > 1) {
-          let decPart = parts[1].substring(0, 2);
-          if (decPart.length === 1) decPart += '0';
-          valDec = parseInt(decPart, 10) || 0;
-        } else {
-          valDec = 0;
-        }
-      }
-
-      renderWindowInt(valInt);
-
-      const items = document.querySelectorAll('#itemsInt .picker-item');
-      items.forEach((it, idx) => {
-        if (parseInt(it.innerText, 10) === valInt) {
-          document.getElementById('colInt').scrollTop = idx * 40;
-        }
-      });
-
-      document.getElementById('colDec').scrollTop = valDec * 40;
-      updateHighlight('dec', valDec);
-
-      setTimeout(() => { isUserTyping = false; }, 100);
-    }
-
-    function updateHighlight(type, val) {
-      for (let i = 0; i < 100; i++) {
-        const item = document.getElementById(`item-${type}-${i}`);
-        if (item) {
-          if (i === val) item.classList.add('active');
-          else item.classList.remove('active');
-        }
-      }
-    }
 
     function renderOptions() {
       const catGrid = document.getElementById('categoryGrid');
@@ -375,7 +208,8 @@
     }
 
     function sendData() {
-      const amount = parseFloat(`${valInt}.${valDec.toString().padStart(2, '0')}`);
+      const rawVal = document.getElementById('manualInput').value.trim().replace(',', '.');
+      const amount = parseFloat(rawVal);
 
       if (isNaN(amount) || amount <= 0) {
         tg.showAlert("Пожалуйста, укажите сумму больше 0");
@@ -390,7 +224,6 @@
       }));
     }
 
-    initWheels();
     renderOptions();
   </script>
 </body>
