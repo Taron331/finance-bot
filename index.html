@@ -31,7 +31,7 @@
       padding: 2px;
       width: 100%;
       max-width: 340px;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }
     .segmented-btn {
       flex: 1;
@@ -53,15 +53,15 @@
       position: relative;
       width: 100%;
       max-width: 340px;
-      height: 180px;
+      height: 170px;
       background: var(--card-bg);
       border-radius: 14px;
       display: flex;
       justify-content: center;
       align-items: center;
       overflow: hidden;
-      margin-bottom: 20px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.01);
+      margin-bottom: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
     }
     .picker-selection {
       position: absolute;
@@ -83,7 +83,7 @@
       scrollbar-width: none;
     }
     .wheel::-webkit-scrollbar { display: none; }
-    .wheel-padding { height: 70px; }
+    .wheel-padding { height: 65px; }
     .item {
       height: 40px;
       display: flex;
@@ -93,13 +93,38 @@
       font-weight: 600;
       scroll-snap-align: center;
     }
+    .manual-link {
+      font-size: 13px;
+      color: var(--button-color);
+      cursor: pointer;
+      font-weight: 500;
+      margin-bottom: 14px;
+    }
+    .manual-input-box {
+      display: none;
+      width: 100%;
+      max-width: 340px;
+      margin-bottom: 14px;
+    }
+    .manual-input {
+      width: 100%;
+      padding: 12px;
+      font-size: 18px;
+      text-align: center;
+      border: 1px solid rgba(0,0,0,0.15);
+      border-radius: 10px;
+      box-sizing: border-box;
+      outline: none;
+      background: var(--card-bg);
+      color: var(--text-color);
+    }
     .label-group {
       width: 100%;
       max-width: 340px;
-      font-size: 13px;
+      font-size: 12px;
       color: #8e8e93;
       text-transform: uppercase;
-      margin: 10px 0 6px 4px;
+      margin: 8px 0 4px 4px;
     }
     .grid {
       display: grid;
@@ -107,11 +132,11 @@
       gap: 8px;
       width: 100%;
       max-width: 340px;
-      margin-bottom: 16px;
+      margin-bottom: 10px;
     }
     .option-card {
       background: var(--card-bg);
-      padding: 12px;
+      padding: 10px;
       border-radius: 10px;
       text-align: center;
       font-size: 14px;
@@ -134,7 +159,7 @@
       font-size: 16px;
       font-weight: 600;
       cursor: pointer;
-      margin-top: 10px;
+      margin-top: 6px;
     }
   </style>
 </head>
@@ -145,7 +170,8 @@
     <button class="segmented-btn" id="btnIncome" onclick="setType('Доход')">Доход</button>
   </div>
 
-  <div class="picker-container">
+  <!-- iOS Барабан -->
+  <div class="picker-container" id="pickerBox" onclick="enableManualInput()">
     <div class="picker-selection"></div>
     <div class="wheel" id="wheelInt">
       <div class="wheel-padding"></div>
@@ -157,6 +183,13 @@
       <div class="wheel-padding"></div>
     </div>
     <span style="font-size: 20px; font-weight: bold; margin-left: 8px;">€</span>
+  </div>
+
+  <div class="manual-link" id="manualToggleBtn" onclick="toggleInputMode()">✏️ Ввести точно вручную</div>
+
+  <!-- Поле ручного ввода -->
+  <div class="manual-input-box" id="manualBox">
+    <input type="number" step="0.01" class="manual-input" id="numInput" placeholder="0.00" oninput="syncFromInput()">
   </div>
 
   <div class="label-group">Категория</div>
@@ -174,6 +207,7 @@
     let currentType = "Расход";
     let selectedCategory = "";
     let selectedAccount = "Карта";
+    let isManualMode = false;
 
     const categoriesExpense = ["🍔 Еда", "🛒 Продукты", "🚗 Авто", "🏠 Дом", "🎉 Развлечения", "📦 Другое"];
     const categoriesIncome = ["💼 Зарплата", "📈 Инвестиции", "🎁 Подарок", "💰 Другое"];
@@ -181,19 +215,22 @@
 
     function initWheels() {
       const wInt = document.getElementById('wheelInt');
-      for (let i = 0; i <= 500; i++) {
+      for (let i = 0; i <= 1000; i++) {
         const div = document.createElement('div');
         div.className = 'item';
         div.innerText = i;
         wInt.appendChild(div);
       }
+      
       const wDec = document.getElementById('wheelDec');
-      for (let i = 0; i < 100; i += 5) {
+      // Центы от 00 до 99 по 1
+      for (let i = 0; i < 100; i++) {
         const div = document.createElement('div');
         div.className = 'item';
         div.innerText = i.toString().padStart(2, '0');
         wDec.appendChild(div);
       }
+
       wInt.parentElement.querySelectorAll('.wheel-padding').forEach(p => wInt.appendChild(p.cloneNode()));
       wDec.parentElement.querySelectorAll('.wheel-padding').forEach(p => wDec.appendChild(p.cloneNode()));
     }
@@ -238,22 +275,66 @@
       renderOptions();
     }
 
-    function getSelectedAmount() {
+    function toggleInputMode() {
+      isManualMode = !isManualMode;
+      const mBox = document.getElementById('manualBox');
+      const pBox = document.getElementById('pickerBox');
+      const btn = document.getElementById('manualToggleBtn');
+
+      if (isManualMode) {
+        mBox.style.display = 'block';
+        pBox.style.opacity = '0.4';
+        btn.innerText = '🛞 Вернуться к барабану';
+        const curAmt = getWheelAmount();
+        document.getElementById('numInput').value = curAmt > 0 ? curAmt : '';
+        document.getElementById('numInput').focus();
+      } else {
+        mBox.style.display = 'none';
+        pBox.style.opacity = '1';
+        btn.innerText = '✏️ Ввести точно вручную';
+      }
+    }
+
+    function getWheelAmount() {
       const wInt = document.getElementById('wheelInt');
       const wDec = document.getElementById('wheelDec');
       const intIdx = Math.round(wInt.scrollTop / 40);
       const decIdx = Math.round(wDec.scrollTop / 40);
-      const intVal = intIdx;
-      const decVal = decIdx * 5;
-      return (intVal + (decVal / 100)).toFixed(2);
+      return (intIdx + (decIdx / 100)).toFixed(2);
+    }
+
+    function setWheelAmount(val) {
+      const parts = val.toFixed(2).split('.');
+      const intVal = parseInt(parts[0]) || 0;
+      const decVal = parseInt(parts[1]) || 0;
+
+      const wInt = document.getElementById('wheelInt');
+      const wDec = document.getElementById('wheelDec');
+      
+      wInt.scrollTop = intVal * 40;
+      wDec.scrollTop = decVal * 40;
+    }
+
+    function syncFromInput() {
+      const val = parseFloat(document.getElementById('numInput').value);
+      if (!isNaN(val)) {
+        setWheelAmount(val);
+      }
     }
 
     function sendData() {
-      const amount = parseFloat(getSelectedAmount());
+      let amount = 0;
+      if (isManualMode) {
+        amount = parseFloat(document.getElementById('numInput').value);
+      } else {
+        amount = parseFloat(getWheelAmount());
+      }
+
       if (!amount || amount <= 0) {
-        tg.showAlert("Пожалуйста, выберите сумму больше 0");
+        tg.showAlert("Пожалуйста, введите или выберите сумму больше 0");
         return;
       }
+
       tg.sendData(JSON.stringify({
         type: currentType,
         amount: amount,
