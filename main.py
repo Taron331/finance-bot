@@ -44,10 +44,13 @@ def get_sheet():
 
         creds_data = json.loads(creds_raw)
 
-        # Полная очистка ключа RSA
+        # Полная расшифровка ключа RSA из Railway
         if "private_key" in creds_data:
             pk = creds_data["private_key"]
+            # Заменяем варианты двойных и одинарных слэшей на реальный Enter
             pk = pk.replace("\\\\n", "\n").replace("\\n", "\n")
+            # Убираем случайно попавшие обрамляющие кавычки
+            pk = pk.strip('"').strip("'")
             creds_data["private_key"] = pk
 
         scopes = [
@@ -63,7 +66,6 @@ def get_sheet():
         err_msg = f"[{source}] {type(e).__name__}: {e}"
         logging.error(f"Ошибка подключения: {err_msg}")
         return None, err_msg
-
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Бот запущен и готов к работе!")
