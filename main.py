@@ -13,11 +13,9 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8926455676:AAEmvLB7-D68aFI1K982bnMVeofTiA4gI0Y")
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_BOT_TOKEN")
 SPREADSHEET_NAME = os.environ.get("SPREADSHEET_NAME", "Finance")
-CREDENTIALS_FILE = "credentials.json"
 
-# Хелпер для запуска HTTP-сервера (защита от падения Railway по Healthcheck)
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -34,24 +32,14 @@ threading.Thread(target=run_dummy_server, daemon=True).start()
 
 def get_sheet():
     try:
-        source = "GOOGLE_CREDS"
         creds_raw = os.environ.get("GOOGLE_CREDS")
-
         if not creds_raw:
-            source = CREDENTIALS_FILE
-            with open(CREDENTIALS_FILE, 'r', encoding='utf-8') as f:
-                creds_raw = f.read()
+            return None, "Переменная GOOGLE_CREDS не найдена в Railway Variables"
 
         creds_data = json.loads(creds_raw)
 
-        # Полная расшифровка ключа RSA из Railway
         if "private_key" in creds_data:
-            pk = creds_data["private_key"]
-            # Заменяем варианты двойных и одинарных слэшей на реальный Enter
-            pk = pk.replace("\\\\n", "\n").replace("\\n", "\n")
-            # Убираем случайно попавшие обрамляющие кавычки
-            pk = pk.strip('"').strip("'")
-            creds_data["private_key"] = pk
+            creds_data["private_key"] = creds_data["private_key"].replace("\\n", "\n")
 
         scopes = [
             'https://www.googleapis.com/auth/spreadsheets',
@@ -63,9 +51,9 @@ def get_sheet():
         sheet = gc.open(SPREADSHEET_NAME).sheet1
         return sheet, None
     except Exception as e:
-        err_msg = f"[{source}] {type(e).__name__}: {e}"
-        logging.error(f"Ошибка подключения: {err_msg}")
-        return None, err_msg
+        logging.error(f"Ошибка подключения: {e}")
+        return None, str(e)
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Бот запущен и готов к работе!")
@@ -86,9 +74,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def main():
-    token = os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("BOT_TOKEN") or "8926455676:AAEmvLB7-D68aFIlK982bnMVeofTiA4gI0Y"
-    token = token.strip().strip('"').strip("'")
-    
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", BOT_TOKEN).strip().strip('"').strip("'")
     application = Application.builder().token(token).build()
 
     application.add_handler(CommandHandler("start", start))
@@ -96,6 +82,7 @@ def main():
 
     print("Бот успешно запущен...")
     application.run_polling()
+
 
 if __name__ == '__main__':
     main()
