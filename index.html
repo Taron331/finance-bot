@@ -51,7 +51,7 @@
       box-shadow: 0px 3px 8px rgba(0, 0, 0, 0.3);
     }
     
-    /* 3D Барабан */
+    /* Облегченный барабан */
     .wheel-container {
       width: 100%;
       max-width: 340px;
@@ -75,6 +75,7 @@
       scrollbar-width: none;
       -ms-overflow-style: none;
       position: relative;
+      -webkit-overflow-scrolling: touch;
     }
     .picker-column::-webkit-scrollbar {
       display: none;
@@ -93,7 +94,7 @@
       scroll-snap-align: center;
       color: var(--text-color);
       opacity: 0.3;
-      transition: opacity 0.1s, font-size 0.1s;
+      transition: opacity 0.1s;
     }
 
     .picker-item.active {
@@ -116,7 +117,7 @@
       z-index: 2;
     }
 
-    /* Поле клавиатуры */
+    /* Ввод клавиатуры */
     .input-box {
       width: 100%;
       max-width: 340px;
@@ -189,7 +190,7 @@
     <button class="segmented-btn" id="btnIncome" onclick="setType('Доход')">Доход</button>
   </div>
 
-  <!-- Барабан -->
+  <!-- Облегченный барабан -->
   <div class="wheel-container">
     <div class="selection-overlay"></div>
     
@@ -210,9 +211,9 @@
     <span class="currency-label">€</span>
   </div>
 
-  <!-- Быстрый ввод клавиатурой -->
+  <!-- Поле клавиатурного ввода -->
   <div class="input-box">
-    <input type="number" step="any" inputmode="decimal" class="manual-input" id="manualInput" placeholder="Или введите сумму" oninput="onInputChanged()">
+    <input type="number" step="any" inputmode="decimal" class="manual-input" id="manualInput" placeholder="Введите сумму (напр. 800)" oninput="onInputChanged()">
   </div>
 
   <div class="label-group">Категория</div>
@@ -234,14 +235,13 @@
     let valInt = 0;
     let valDec = 0;
     let isUserTyping = false;
-    let maxIntLimit = 10000;
 
     const categoriesExpense = ["🍔 Еда", "🛒 Продукты", "🚗 Авто", "🏠 Дом", "🎉 Развлечения", "📦 Другое"];
     const categoriesIncome = ["💼 Зарплата", "🎁 Подарок", "💰 Другое"];
     const accounts = ["Карта", "💵 Наличные"];
 
     function initWheels() {
-      renderIntItems(maxIntLimit);
+      renderWindowInt(0);
 
       const containerDec = document.getElementById('itemsDec');
       let htmlDec = '';
@@ -251,15 +251,18 @@
       }
       containerDec.innerHTML = htmlDec;
 
-      updateHighlight('int', 0);
       updateHighlight('dec', 0);
     }
 
-    function renderIntItems(maxVal) {
+    // Динамический рендер только видимых элементов около текущего числа (без зависаний)
+    function renderWindowInt(centerVal) {
       const containerInt = document.getElementById('itemsInt');
       let htmlInt = '';
-      for (let i = 0; i <= maxVal; i++) {
-        htmlInt += `<div class="picker-item" id="item-int-${i}">${i}</div>`;
+      const start = Math.max(0, centerVal - 100);
+      const end = centerVal + 100;
+
+      for (let i = start; i <= end; i++) {
+        htmlInt += `<div class="picker-item ${i === centerVal ? 'active' : ''}" id="item-int-${i}">${i}</div>`;
       }
       containerInt.innerHTML = htmlInt;
     }
@@ -271,8 +274,12 @@
       const index = Math.round(col.scrollTop / 40);
 
       if (type === 'int') {
-        valInt = Math.max(index, 0);
-        updateHighlight('int', valInt);
+        const items = document.querySelectorAll('#itemsInt .picker-item');
+        if (items[index]) {
+          valInt = parseInt(items[index].innerText, 10);
+          items.forEach(it => it.classList.remove('active'));
+          items[index].classList.add('active');
+        }
       } else {
         valDec = Math.min(Math.max(index, 0), 99);
         updateHighlight('dec', valDec);
@@ -302,29 +309,27 @@
         }
       }
 
-      if (valInt > maxIntLimit) {
-        maxIntLimit = valInt + 1000;
-        renderIntItems(maxIntLimit);
-      }
+      renderWindowInt(valInt);
 
-      document.getElementById('colInt').scrollTop = valInt * 40;
+      const items = document.querySelectorAll('#itemsInt .picker-item');
+      items.forEach((it, idx) => {
+        if (parseInt(it.innerText, 10) === valInt) {
+          document.getElementById('colInt').scrollTop = idx * 40;
+        }
+      });
+
       document.getElementById('colDec').scrollTop = valDec * 40;
-
-      updateHighlight('int', valInt);
       updateHighlight('dec', valDec);
 
-      setTimeout(() => { isUserTyping = false; }, 50);
+      setTimeout(() => { isUserTyping = false; }, 100);
     }
 
     function updateHighlight(type, val) {
-      const max = type === 'int' ? maxIntLimit : 99;
-      for (let i = val - 2; i <= val + 2; i++) {
-        if (i >= 0 && i <= max) {
-          const item = document.getElementById(`item-${type}-${i}`);
-          if (item) {
-            if (i === val) item.classList.add('active');
-            else item.classList.remove('active');
-          }
+      for (let i = 0; i < 100; i++) {
+        const item = document.getElementById(`item-${type}-${i}`);
+        if (item) {
+          if (i === val) item.classList.add('active');
+          else item.classList.remove('active');
         }
       }
     }
