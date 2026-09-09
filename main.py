@@ -1,6 +1,9 @@
 import logging
 import json
 import datetime
+import os
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import gspread
 from telegram import Update, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
@@ -15,9 +18,28 @@ logging.basicConfig(
     level=logging.INFO
 )
 
+# --- ФОНОВЫЙ HTTP-СЕРВЕР ДЛЯ RENDER (обязателен для Web Service) ---
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+def start_health_check_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+    server.serve_forever()
+
+# Запускаем сервер в фоновом режиме перед стартом бота
+threading.Thread(target=start_health_check_server, daemon=True).start()
+# -----------------------------------------------------------------
+
 # Функция подключения к Google Таблице с пересозданием сессии
 def get_sheet():
     try:
+        # Проверяем, существует ли файл перед подключением
+        if not os.path.exists(CREDENTIALS_FILE):
+            return None, f"Файл {CREDENTIALS_FILE} не найден в директории проекта!"
         gc = gspread.service_account(filename=CREDENTIALS_FILE)
         return gc.open(SPREADSHEET_NAME).sheet1, None
     except Exception as e:
