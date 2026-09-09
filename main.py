@@ -18,7 +18,14 @@ logging.basicConfig(
 # Функция подключения к Google Таблице с пересозданием сессии
 def get_sheet():
     try:
-        gc = gspread.service_account(filename=CREDENTIALS_FILE)
+        with open(CREDENTIALS_FILE, 'r', encoding='utf-8') as f:
+            creds_data = json.load(f)
+
+        # Принудительно меняем текстовый \n на реальный перенос строки
+        if "private_key" in creds_data:
+            creds_data["private_key"] = creds_data["private_key"].replace("\\n", "\n")
+
+        gc = gspread.service_account_from_dict(creds_data)
         return gc.open(SPREADSHEET_NAME).sheet1, None
     except Exception as e:
         logging.error(f"Ошибка подключения к Google Таблице: {e}")
