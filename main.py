@@ -1,13 +1,15 @@
 import os
 import json
 import logging
+import time
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import gspread
+from google.oauth2.service_account import Credentials
+import google.auth.transport.requests
 
-# Настройка логов
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -16,7 +18,6 @@ logging.basicConfig(
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_BOT_TOKEN")
 SPREADSHEET_NAME = os.environ.get("SPREADSHEET_NAME", "Finance")
 
-# Dummy HTTP Сервер для прохождения Healthcheck в Railway
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -35,12 +36,10 @@ def get_sheet():
     try:
         creds_raw = os.environ.get("GOOGLE_CREDS")
         if not creds_raw:
-            return None, "Переменная GOOGLE_CREDS не найдена в Railway Variables"
+            return None, "Переменная GOOGLE_CREDS не найдена"
 
-        # Парсим JSON из переменной окружения
         creds_data = json.loads(creds_raw)
 
-        # Вычищаем переносы строк в приватном ключе
         if "private_key" in creds_data:
             pk = creds_data["private_key"]
             pk = pk.replace("\\\\n", "\n").replace("\\n", "\n")
@@ -51,13 +50,19 @@ def get_sheet():
             'https://www.googleapis.com/auth/drive'
         ]
 
-        # Авторизация напрямую через gspread (без ручного генератора JWT)
-        gc = gspread.service_account_from_dict(creds_data, scopes=scopes)
+        credentials = Credentials.from_service_account_info(creds_data, scopes=scopes)
+
+        # Компенсация рассинхрона часов (Clock Skew Fix)
+        request = google.auth.transport.requests.Request()
+        credentials._time_creation = time.time() - 60
+        credentials.refresh(request)
+
+        gc = gspread.authorize(credentials)
         sheet = gc.open(SPREADSHEET_NAME).sheet1
         return sheet, None
 
     except Exception as e:
-        err_msg = f"Ошибка подключения к Google Таблице: {e}"
+        err_msg = f"Ошибка подключения к Таблице: {e}"
         logging.error(err_msg)
         return None, err_msg
 
