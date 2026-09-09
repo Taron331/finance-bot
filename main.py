@@ -6,8 +6,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import gspread
-from google.oauth2.service_account import Credentials
 
+# Настройка логов
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -16,6 +16,7 @@ logging.basicConfig(
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_BOT_TOKEN")
 SPREADSHEET_NAME = os.environ.get("SPREADSHEET_NAME", "Finance")
 
+# Dummy HTTP Сервер для прохождения Healthcheck в Railway
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -36,23 +37,29 @@ def get_sheet():
         if not creds_raw:
             return None, "Переменная GOOGLE_CREDS не найдена в Railway Variables"
 
+        # Парсим JSON из переменной окружения
         creds_data = json.loads(creds_raw)
 
+        # Вычищаем переносы строк в приватном ключе
         if "private_key" in creds_data:
-            creds_data["private_key"] = creds_data["private_key"].replace("\\n", "\n")
+            pk = creds_data["private_key"]
+            pk = pk.replace("\\\\n", "\n").replace("\\n", "\n")
+            creds_data["private_key"] = pk
 
         scopes = [
             'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive'
         ]
 
-        credentials = Credentials.from_service_account_info(creds_data, scopes=scopes)
-        gc = gspread.authorize(credentials)
+        # Авторизация напрямую через gspread (без ручного генератора JWT)
+        gc = gspread.service_account_from_dict(creds_data, scopes=scopes)
         sheet = gc.open(SPREADSHEET_NAME).sheet1
         return sheet, None
+
     except Exception as e:
-        logging.error(f"Ошибка подключения: {e}")
-        return None, str(e)
+        err_msg = f"Ошибка подключения к Google Таблице: {e}"
+        logging.error(err_msg)
+        return None, err_msg
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -64,7 +71,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "📊 Отчет по месяцам":
         sheet, error = get_sheet()
         if error:
-            await update.message.reply_text(f"⚠️ Ошибка подключения к Таблице:\n{error}")
+            await update.message.reply_text(f"⚠️ {error}")
             return
         try:
             records = sheet.get_all_records()
