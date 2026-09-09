@@ -35,7 +35,7 @@
     }
     .segmented-btn {
       flex: 1;
-      padding: 8px 0;
+      padding: 10px 0;
       border: none;
       background: transparent;
       font-size: 14px;
@@ -49,85 +49,74 @@
       background: var(--card-bg);
       box-shadow: 0px 3px 8px rgba(0, 0, 0, 0.12);
     }
-    .picker-container {
-      position: relative;
+    
+    .picker-box {
       width: 100%;
       max-width: 340px;
-      height: 160px;
       background: var(--card-bg);
       border-radius: 14px;
+      padding: 12px 16px;
+      box-sizing: border-box;
       display: flex;
       justify-content: center;
       align-items: center;
-      overflow: hidden;
+      gap: 8px;
       margin-bottom: 8px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.05);
     }
-    .picker-selection {
-      position: absolute;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 90%;
-      height: 40px;
-      background: rgba(0, 122, 255, 0.08);
-      border-top: 1px solid rgba(0, 122, 255, 0.3);
-      border-bottom: 1px solid rgba(0, 122, 255, 0.3);
-      border-radius: 8px;
-      pointer-events: none;
-      z-index: 2;
-    }
-    .wheel {
-      height: 100%;
-      flex: 1;
-      overflow-y: scroll;
-      scroll-snap-type: y mandatory;
-      scrollbar-width: none;
-      z-index: 1;
-    }
-    .wheel::-webkit-scrollbar { display: none; }
-    .wheel-padding { height: 60px; }
-    .item {
-      height: 40px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-      font-weight: 600;
-      scroll-snap-align: center;
-      box-sizing: border-box;
-    }
-    .manual-link {
-      font-size: 13px;
-      color: var(--button-color);
+
+    .wheel-select {
+      appearance: none;
+      -webkit-appearance: none;
+      background: rgba(118, 118, 128, 0.08);
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text-color);
+      text-align: center;
+      outline: none;
       cursor: pointer;
-      font-weight: 500;
-      margin-bottom: 14px;
     }
-    .manual-input-box {
-      display: none;
+
+    .dot-label {
+      font-size: 26px;
+      font-weight: 700;
+    }
+
+    .currency-label {
+      font-size: 22px;
+      font-weight: 600;
+      color: #8e8e93;
+    }
+
+    .input-box {
       width: 100%;
       max-width: 340px;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
+
     .manual-input {
       width: 100%;
-      padding: 12px;
-      font-size: 18px;
+      padding: 10px;
+      font-size: 16px;
       text-align: center;
-      border: 1px solid rgba(0,0,0,0.15);
+      border: 1px solid rgba(0, 0, 0, 0.12);
       border-radius: 10px;
       box-sizing: border-box;
       outline: none;
       background: var(--card-bg);
       color: var(--text-color);
     }
+
     .label-group {
       width: 100%;
       max-width: 340px;
       font-size: 12px;
       color: #8e8e93;
       text-transform: uppercase;
-      margin: 8px 0 4px 4px;
+      margin: 8px 0 6px 4px;
     }
     .grid {
       display: grid;
@@ -135,11 +124,11 @@
       gap: 8px;
       width: 100%;
       max-width: 340px;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
     }
     .option-card {
       background: var(--card-bg);
-      padding: 10px;
+      padding: 12px;
       border-radius: 10px;
       text-align: center;
       font-size: 14px;
@@ -162,7 +151,7 @@
       font-size: 16px;
       font-weight: 600;
       cursor: pointer;
-      margin-top: 6px;
+      margin-top: 10px;
     }
   </style>
 </head>
@@ -173,20 +162,17 @@
     <button class="segmented-btn" id="btnIncome" onclick="setType('Доход')">Доход</button>
   </div>
 
-  <!-- iOS Барабан -->
-  <div class="picker-container" id="pickerBox">
-    <div class="picker-selection"></div>
-    <div class="wheel" id="wheelInt"></div>
-    <span style="font-size: 22px; font-weight: bold; margin: 0 4px; z-index:2;">.</span>
-    <div class="wheel" id="wheelDec"></div>
-    <span style="font-size: 20px; font-weight: bold; margin-left: 8px; z-index:2;">€</span>
+  <!-- Барабан колесо -->
+  <div class="picker-box">
+    <select class="wheel-select" id="wheelInt" onchange="syncInputFromWheel()"></select>
+    <span class="dot-label">.</span>
+    <select class="wheel-select" id="wheelDec" onchange="syncInputFromWheel()"></select>
+    <span class="currency-label">€</span>
   </div>
 
-  <div class="manual-link" id="manualToggleBtn" onclick="toggleInputMode()">✏️ Ввести точно вручную</div>
-
-  <!-- Поле ручного ввода -->
-  <div class="manual-input-box" id="manualBox">
-    <input type="number" step="0.01" class="manual-input" id="numInput" placeholder="0.00">
+  <!-- Ручной ввод для синхронизации -->
+  <div class="input-box">
+    <input type="number" step="0.01" class="manual-input" id="manualInput" placeholder="Быстрый ввод (например: 15)" oninput="syncWheelFromInput()">
   </div>
 
   <div class="label-group">Категория</div>
@@ -204,56 +190,67 @@
     let currentType = "Расход";
     let selectedCategory = "";
     let selectedAccount = "Карта";
-    let isManualMode = false;
 
     const categoriesExpense = ["🍔 Еда", "🛒 Продукты", "🚗 Авто", "🏠 Дом", "🎉 Развлечения", "📦 Другое"];
     const categoriesIncome = ["💼 Зарплата", "📈 Инвестиции", "🎁 Подарок", "💰 Другое"];
     const accounts = ["Карта", "💵 Наличные"];
 
-    function initWheels() {
+    function populateWheels() {
       const wInt = document.getElementById('wheelInt');
       const wDec = document.getElementById('wheelDec');
-      
+
       wInt.innerHTML = '';
       wDec.innerHTML = '';
 
-      // Верхний padding
-      const padTopInt = document.createElement('div'); padTopInt.className = 'wheel-padding';
-      wInt.appendChild(padTopInt);
-
       for (let i = 0; i <= 500; i++) {
-        const div = document.createElement('div');
-        div.className = 'item';
-        div.setAttribute('data-val', i);
-        div.innerText = i;
-        wInt.appendChild(div);
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.text = i;
+        wInt.appendChild(opt);
       }
-
-      // Нижний padding
-      const padBotInt = document.createElement('div'); padBotInt.className = 'wheel-padding';
-      wInt.appendChild(padBotInt);
-
-      // Центы от 00 до 99
-      const padTopDec = document.createElement('div'); padTopDec.className = 'wheel-padding';
-      wDec.appendChild(padTopDec);
 
       for (let i = 0; i < 100; i++) {
-        const div = document.createElement('div');
-        div.className = 'item';
-        const strVal = i.toString().padStart(2, '0');
-        div.setAttribute('data-val', strVal);
-        div.innerText = strVal;
-        wDec.appendChild(div);
+        const opt = document.createElement('option');
+        const str = i.toString().padStart(2, '0');
+        opt.value = str;
+        opt.text = str;
+        wDec.appendChild(opt);
       }
 
-      const padBotDec = document.createElement('div'); padBotDec.className = 'wheel-padding';
-      wDec.appendChild(padBotDec);
+      wInt.value = "0";
+      wDec.value = "00";
+    }
 
-      // Сброс прокрутки ровно на 0
-      setTimeout(() => {
-        wInt.scrollTop = 0;
-        wDec.scrollTop = 0;
-      }, 100);
+    // Синхронизация барабана, когда пользователь печатает в текстовом поле
+    function syncWheelFromInput() {
+      const val = document.getElementById('manualInput').value.trim().replace(',', '.');
+      if (!val) return;
+
+      const parts = val.split('.');
+      const intPart = parseInt(parts[0], 10) || 0;
+
+      const wInt = document.getElementById('wheelInt');
+      const wDec = document.getElementById('wheelDec');
+
+      // Устанавливаем евро
+      if (intPart >= 0 && intPart <= 500) {
+        wInt.value = intPart.toString();
+      }
+
+      // Устанавливаем центы, если они введены
+      if (parts.length > 1) {
+        let decPart = parts[1].substring(0, 2);
+        if (decPart.length === 1) decPart += '0';
+        const decInt = parseInt(decPart, 10) || 0;
+        wDec.value = decInt.toString().padStart(2, '0');
+      }
+    }
+
+    // Синхронизация поля ввода, когда крутят барабан
+    function syncInputFromWheel() {
+      const intVal = document.getElementById('wheelInt').value;
+      const decVal = document.getElementById('wheelDec').value;
+      document.getElementById('manualInput').value = `${intVal}.${decVal}`;
     }
 
     function renderOptions() {
@@ -296,64 +293,13 @@
       renderOptions();
     }
 
-    function toggleInputMode() {
-      isManualMode = !isManualMode;
-      const mBox = document.getElementById('manualBox');
-      const pBox = document.getElementById('pickerBox');
-      const btn = document.getElementById('manualToggleBtn');
-
-      if (isManualMode) {
-        mBox.style.display = 'block';
-        pBox.style.opacity = '0.3';
-        btn.innerText = '🛞 Вернуться к барабану';
-        const curAmt = getWheelAmount();
-        document.getElementById('numInput').value = curAmt > 0 ? curAmt : '';
-        document.getElementById('numInput').focus();
-      } else {
-        mBox.style.display = 'none';
-        pBox.style.opacity = '1';
-        btn.innerText = '✏️ Ввести точно вручную';
-      }
-    }
-
-    function getCenteredItemValue(wheelId) {
-      const wheel = document.getElementById(wheelId);
-      const items = wheel.querySelectorAll('.item');
-      const wheelRect = wheel.getBoundingClientRect();
-      const centerY = wheelRect.top + wheelRect.height / 2;
-
-      let closestItem = null;
-      let minDiff = Infinity;
-
-      items.forEach(item => {
-        const rect = item.getBoundingClientRect();
-        const itemCenterY = rect.top + rect.height / 2;
-        const diff = Math.abs(centerY - itemCenterY);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestItem = item;
-        }
-      });
-
-      return closestItem ? closestItem.getAttribute('data-val') : "0";
-    }
-
-    function getWheelAmount() {
-      const intVal = getCenteredItemValue('wheelInt');
-      const decVal = getCenteredItemValue('wheelDec');
-      return (parseFloat(intVal) + parseFloat(decVal) / 100).toFixed(2);
-    }
-
     function sendData() {
-      let amount = 0;
-      if (isManualMode) {
-        amount = parseFloat(document.getElementById('numInput').value);
-      } else {
-        amount = parseFloat(getWheelAmount());
-      }
+      const intVal = document.getElementById('wheelInt').value;
+      const decVal = document.getElementById('wheelDec').value;
+      const amount = parseFloat(`${intVal}.${decVal}`);
 
       if (isNaN(amount) || amount <= 0) {
-        tg.showAlert("Пожалуйста, введите или выберите сумму больше 0");
+        tg.showAlert("Пожалуйста, выберите сумму больше 0");
         return;
       }
 
@@ -365,7 +311,7 @@
       }));
     }
 
-    initWheels();
+    populateWheels();
     renderOptions();
   </script>
 </body>
