@@ -23,6 +23,7 @@
       flex-direction: column;
       align-items: center;
       user-select: none;
+      -webkit-user-select: none;
     }
     .segmented-control {
       display: flex;
@@ -50,45 +51,77 @@
       box-shadow: 0px 3px 8px rgba(0, 0, 0, 0.12);
     }
     
-    .picker-box {
+    /* Красивый 3D Барабан */
+    .wheel-container {
       width: 100%;
       max-width: 340px;
       background: var(--card-bg);
       border-radius: 14px;
-      padding: 12px 16px;
+      padding: 10px 16px;
       box-sizing: border-box;
       display: flex;
       justify-content: center;
       align-items: center;
-      gap: 8px;
-      margin-bottom: 8px;
+      gap: 10px;
+      margin-bottom: 10px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      position: relative;
     }
 
-    .wheel-select {
-      appearance: none;
-      -webkit-appearance: none;
-      background: rgba(118, 118, 128, 0.08);
-      border: 1px solid rgba(0, 0, 0, 0.1);
-      border-radius: 10px;
-      padding: 8px 12px;
+    .picker-column {
+      height: 120px;
+      width: 110px;
+      overflow-y: scroll;
+      scroll-snap-type: y mandatory;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      position: relative;
+    }
+    .picker-column::-webkit-scrollbar {
+      display: none;
+    }
+
+    .picker-spacer {
+      height: 40px;
+    }
+
+    .picker-item {
+      height: 40px;
+      line-height: 40px;
+      text-align: center;
       font-size: 24px;
       font-weight: 700;
+      scroll-snap-align: center;
       color: var(--text-color);
-      text-align: center;
-      outline: none;
-      cursor: pointer;
+      opacity: 0.3;
+      transition: opacity 0.1s;
+    }
+
+    .picker-item.active {
+      opacity: 1;
+      font-size: 28px;
+    }
+
+    .selection-overlay {
+      position: absolute;
+      width: calc(100% - 32px);
+      height: 40px;
+      background: rgba(118, 118, 128, 0.12);
+      border-radius: 8px;
+      pointer-events: none;
     }
 
     .dot-label {
-      font-size: 26px;
+      font-size: 28px;
       font-weight: 700;
+      z-index: 2;
     }
 
     .currency-label {
-      font-size: 22px;
+      font-size: 24px;
       font-weight: 600;
       color: #8e8e93;
+      z-index: 2;
     }
 
     .input-box {
@@ -162,17 +195,32 @@
     <button class="segmented-btn" id="btnIncome" onclick="setType('Доход')">Доход</button>
   </div>
 
-  <!-- Барабан колесо -->
-  <div class="picker-box">
-    <select class="wheel-select" id="wheelInt" onchange="syncInputFromWheel()"></select>
+  <!-- Барабан (Scroll Picker) -->
+  <div class="wheel-container">
+    <div class="selection-overlay"></div>
+    
+    <!-- Колесо Евро -->
+    <div class="picker-column" id="colInt" onscroll="handleScroll('int')">
+      <div class="picker-spacer"></div>
+      <div id="itemsInt"></div>
+      <div class="picker-spacer"></div>
+    </div>
+
     <span class="dot-label">.</span>
-    <select class="wheel-select" id="wheelDec" onchange="syncInputFromWheel()"></select>
+
+    <!-- Колесо Центов -->
+    <div class="picker-column" id="colDec" onscroll="handleScroll('dec')">
+      <div class="picker-spacer"></div>
+      <div id="itemsDec"></div>
+      <div class="picker-spacer"></div>
+    </div>
+
     <span class="currency-label">€</span>
   </div>
 
-  <!-- Ручной ввод для синхронизации -->
+  <!-- Ручной ввод -->
   <div class="input-box">
-    <input type="number" step="0.01" class="manual-input" id="manualInput" placeholder="Быстрый ввод (например: 15)" oninput="syncWheelFromInput()">
+    <input type="number" step="0.01" class="manual-input" id="manualInput" placeholder="Быстрый ввод (например: 15.50)" oninput="syncWheelFromInput()">
   </div>
 
   <div class="label-group">Категория</div>
@@ -191,34 +239,66 @@
     let selectedCategory = "";
     let selectedAccount = "Карта";
 
+    let valInt = 0;
+    let valDec = 0;
+
     const categoriesExpense = ["🍔 Еда", "🛒 Продукты", "🚗 Авто", "🏠 Дом", "🎉 Развлечения", "📦 Другое"];
-    const categoriesIncome = ["💼 Зарплата", "📈 Инвестиции", "🎁 Подарок", "💰 Другое"];
+    const categoriesIncome = ["💼 Зарплата", "🎁 Подарок", "💰 Другое"];
     const accounts = ["Карта", "💵 Наличные"];
 
-    function populateWheels() {
-      const wInt = document.getElementById('wheelInt');
-      const wDec = document.getElementById('wheelDec');
+    function initWheels() {
+      const containerInt = document.getElementById('itemsInt');
+      const containerDec = document.getElementById('itemsDec');
 
-      wInt.innerHTML = '';
-      wDec.innerHTML = '';
-
+      let htmlInt = '';
       for (let i = 0; i <= 500; i++) {
-        const opt = document.createElement('option');
-        opt.value = i;
-        opt.text = i;
-        wInt.appendChild(opt);
+        htmlInt += `<div class="picker-item" id="item-int-${i}">${i}</div>`;
       }
+      containerInt.innerHTML = htmlInt;
 
+      let htmlDec = '';
       for (let i = 0; i < 100; i++) {
-        const opt = document.createElement('option');
         const str = i.toString().padStart(2, '0');
-        opt.value = str;
-        opt.text = str;
-        wDec.appendChild(opt);
+        htmlDec += `<div class="picker-item" id="item-dec-${i}">${str}</div>`;
+      }
+      containerDec.innerHTML = htmlDec;
+
+      updateHighlight('int', 0);
+      updateHighlight('dec', 0);
+    }
+
+    function handleScroll(type) {
+      const col = type === 'int' ? document.getElementById('colInt') : document.getElementById('colDec');
+      const index = Math.round(col.scrollTop / 40);
+
+      if (type === 'int') {
+        valInt = Math.min(Math.max(index, 0), 500);
+        updateHighlight('int', valInt);
+      } else {
+        valDec = Math.min(Math.max(index, 0), 99);
+        updateHighlight('dec', valDec);
       }
 
-      wInt.value = "0";
-      wDec.value = "00";
+      updateInputFromWheel();
+    }
+
+    function updateHighlight(type, val) {
+      const max = type === 'int' ? 500 : 99;
+      for (let i = 0; i <= max; i++) {
+        const item = document.getElementById(`item-${type}-${i}`);
+        if (item) {
+          if (i === val) {
+            item.classList.add('active');
+          } else {
+            item.classList.remove('active');
+          }
+        }
+      }
+    }
+
+    function updateInputFromWheel() {
+      const decStr = valDec.toString().padStart(2, '0');
+      document.getElementById('manualInput').value = `${valInt}.${decStr}`;
     }
 
     function syncWheelFromInput() {
@@ -228,25 +308,22 @@
       const parts = val.split('.');
       const intPart = parseInt(parts[0], 10) || 0;
 
-      const wInt = document.getElementById('wheelInt');
-      const wDec = document.getElementById('wheelDec');
-
       if (intPart >= 0 && intPart <= 500) {
-        wInt.value = intPart.toString();
+        valInt = intPart;
+        document.getElementById('colInt').scrollTop = valInt * 40;
+        updateHighlight('int', valInt);
       }
 
       if (parts.length > 1) {
         let decPart = parts[1].substring(0, 2);
         if (decPart.length === 1) decPart += '0';
         const decInt = parseInt(decPart, 10) || 0;
-        wDec.value = decInt.toString().padStart(2, '0');
+        if (decInt >= 0 && decInt < 100) {
+          valDec = decInt;
+          document.getElementById('colDec').scrollTop = valDec * 40;
+          updateHighlight('dec', valDec);
+        }
       }
-    }
-
-    function syncInputFromWheel() {
-      const intVal = document.getElementById('wheelInt').value;
-      const decVal = document.getElementById('wheelDec').value;
-      document.getElementById('manualInput').value = `${intVal}.${decVal}`;
     }
 
     function renderOptions() {
@@ -290,12 +367,10 @@
     }
 
     function sendData() {
-      const intVal = document.getElementById('wheelInt').value;
-      const decVal = document.getElementById('wheelDec').value;
-      const amount = parseFloat(`${intVal}.${decVal}`);
+      const amount = parseFloat(`${valInt}.${valDec.toString().padStart(2, '0')}`);
 
       if (isNaN(amount) || amount <= 0) {
-        tg.showAlert("Пожалуйста, выберите сумму больше 0");
+        tg.showAlert("Пожалуйста, укажите сумму больше 0");
         return;
       }
 
@@ -307,7 +382,7 @@
       }));
     }
 
-    populateWheels();
+    initWheels();
     renderOptions();
   </script>
 </body>
