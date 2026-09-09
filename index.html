@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Ввод транзакции</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg-color: var(--tg-theme-bg-color, #f4f4f7);
+      --card-bg: var(--tg-theme-secondary-bg-color, #ffffff);
+      --text-color: var(--tg-theme-text-color, #000000);
+      --button-color: var(--tg-theme-button-color, #007aff);
+      --button-text: var(--tg-theme-button-text-color, #ffffff);
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      user-select: none;
+    }
+    .segmented-control {
+      display: flex;
+      background: rgba(118, 118, 128, 0.12);
+      border-radius: 9px;
+      padding: 2px;
+      width: 100%;
+      max-width: 340px;
+      margin-bottom: 16px;
+    }
+    .segmented-btn {
+      flex: 1;
+      padding: 8px 0;
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 7px;
+      cursor: pointer;
+      color: var(--text-color);
+      transition: all 0.2s ease;
+    }
+    .segmented-btn.active {
+      background: var(--card-bg);
+      box-shadow: 0px 3px 8px rgba(0, 0, 0, 0.12);
+    }
+    .picker-container {
+      position: relative;
+      width: 100%;
+      max-width: 340px;
+      height: 180px;
+      background: var(--card-bg);
+      border-radius: 14px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.01);
+    }
+    .picker-selection {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 90%;
+      height: 40px;
+      background: rgba(0, 122, 255, 0.08);
+      border-top: 1px solid rgba(0, 122, 255, 0.3);
+      border-bottom: 1px solid rgba(0, 122, 255, 0.3);
+      border-radius: 8px;
+      pointer-events: none;
+    }
+    .wheel {
+      height: 100%;
+      flex: 1;
+      overflow-y: scroll;
+      scroll-snap-type: y mandatory;
+      scrollbar-width: none;
+    }
+    .wheel::-webkit-scrollbar { display: none; }
+    .wheel-padding { height: 70px; }
+    .item {
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 600;
+      scroll-snap-align: center;
+    }
+    .label-group {
+      width: 100%;
+      max-width: 340px;
+      font-size: 13px;
+      color: #8e8e93;
+      text-transform: uppercase;
+      margin: 10px 0 6px 4px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      width: 100%;
+      max-width: 340px;
+      margin-bottom: 16px;
+    }
+    .option-card {
+      background: var(--card-bg);
+      padding: 12px;
+      border-radius: 10px;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 500;
+      border: 2px solid transparent;
+      cursor: pointer;
+    }
+    .option-card.selected {
+      border-color: var(--button-color);
+      background: rgba(0, 122, 255, 0.05);
+    }
+    .save-btn {
+      width: 100%;
+      max-width: 340px;
+      padding: 14px;
+      background: var(--button-color);
+      color: var(--button-text);
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="segmented-control">
+    <button class="segmented-btn active" id="btnExpense" onclick="setType('Расход')">Расход</button>
+    <button class="segmented-btn" id="btnIncome" onclick="setType('Доход')">Доход</button>
+  </div>
+
+  <div class="picker-container">
+    <div class="picker-selection"></div>
+    <div class="wheel" id="wheelInt">
+      <div class="wheel-padding"></div>
+      <div class="wheel-padding"></div>
+    </div>
+    <span style="font-size: 22px; font-weight: bold; margin: 0 4px;">.</span>
+    <div class="wheel" id="wheelDec">
+      <div class="wheel-padding"></div>
+      <div class="wheel-padding"></div>
+    </div>
+    <span style="font-size: 20px; font-weight: bold; margin-left: 8px;">€</span>
+  </div>
+
+  <div class="label-group">Категория</div>
+  <div class="grid" id="categoryGrid"></div>
+
+  <div class="label-group">Счет</div>
+  <div class="grid" id="accountGrid"></div>
+
+  <button class="save-btn" onclick="sendData()">Сохранить</button>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+
+    let currentType = "Расход";
+    let selectedCategory = "";
+    let selectedAccount = "Карта";
+
+    const categoriesExpense = ["🍔 Еда", "🛒 Продукты", "🚗 Авто", "🏠 Дом", "🎉 Развлечения", "📦 Другое"];
+    const categoriesIncome = ["💼 Зарплата", "📈 Инвестиции", "🎁 Подарок", "💰 Другое"];
+    const accounts = ["Карта", "💵 Наличные"];
+
+    function initWheels() {
+      const wInt = document.getElementById('wheelInt');
+      for (let i = 0; i <= 500; i++) {
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.innerText = i;
+        wInt.appendChild(div);
+      }
+      const wDec = document.getElementById('wheelDec');
+      for (let i = 0; i < 100; i += 5) {
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.innerText = i.toString().padStart(2, '0');
+        wDec.appendChild(div);
+      }
+      wInt.parentElement.querySelectorAll('.wheel-padding').forEach(p => wInt.appendChild(p.cloneNode()));
+      wDec.parentElement.querySelectorAll('.wheel-padding').forEach(p => wDec.appendChild(p.cloneNode()));
+    }
+
+    function renderOptions() {
+      const catGrid = document.getElementById('categoryGrid');
+      catGrid.innerHTML = '';
+      const list = currentType === "Расход" ? categoriesExpense : categoriesIncome;
+      selectedCategory = list[0];
+
+      list.forEach(cat => {
+        const div = document.createElement('div');
+        div.className = `option-card ${cat === selectedCategory ? 'selected' : ''}`;
+        div.innerText = cat;
+        div.onclick = () => {
+          document.querySelectorAll('#categoryGrid .option-card').forEach(c => c.classList.remove('selected'));
+          div.classList.add('selected');
+          selectedCategory = cat;
+        };
+        catGrid.appendChild(div);
+      });
+
+      const accGrid = document.getElementById('accountGrid');
+      accGrid.innerHTML = '';
+      accounts.forEach(acc => {
+        const div = document.createElement('div');
+        div.className = `option-card ${acc === selectedAccount ? 'selected' : ''}`;
+        div.innerText = acc;
+        div.onclick = () => {
+          document.querySelectorAll('#accountGrid .option-card').forEach(c => c.classList.remove('selected'));
+          div.classList.add('selected');
+          selectedAccount = acc;
+        };
+        accGrid.appendChild(div);
+      });
+    }
+
+    function setType(type) {
+      currentType = type;
+      document.getElementById('btnExpense').classList.toggle('active', type === 'Расход');
+      document.getElementById('btnIncome').classList.toggle('active', type === 'Доход');
+      renderOptions();
+    }
+
+    function getSelectedAmount() {
+      const wInt = document.getElementById('wheelInt');
+      const wDec = document.getElementById('wheelDec');
+      const intIdx = Math.round(wInt.scrollTop / 40);
+      const decIdx = Math.round(wDec.scrollTop / 40);
+      const intVal = intIdx;
+      const decVal = decIdx * 5;
+      return (intVal + (decVal / 100)).toFixed(2);
+    }
+
+    function sendData() {
+      const amount = parseFloat(getSelectedAmount());
+      if (!amount || amount <= 0) {
+        tg.showAlert("Пожалуйста, выберите сумму больше 0");
+        return;
+      }
+      tg.sendData(JSON.stringify({
+        type: currentType,
+        amount: amount,
+        category: selectedCategory,
+        account: selectedAccount
+      }));
+    }
+
+    initWheels();
+    renderOptions();
+  </script>
+</body>
+</html>
