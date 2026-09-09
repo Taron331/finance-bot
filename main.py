@@ -1,20 +1,44 @@
 import os
 import json
 import logging
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import gspread
 from google.oauth2.service_account import Credentials
 import google.auth.transport.requests
+
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_BOT_TOKEN")
+SPREADSHEET_NAME = os.environ.get("SPREADSHEET_NAME", "Finance")
+
+class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+def run_dummy_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), SimpleHTTPRequestHandler)
+    server.serve_forever()
+
+threading.Thread(target=run_dummy_server, daemon=True).start()
+
 
 def get_sheet():
     try:
         creds_raw = os.environ.get("GOOGLE_CREDS")
         if not creds_raw:
-            with open(CREDENTIALS_FILE, 'r', encoding='utf-8') as f:
-                creds_raw = f.read()
+            return None, "Переменная GOOGLE_CREDS не найдена"
 
         creds_data = json.loads(creds_raw)
 
-        # Преобразование экранированных символов переноса строки
         if "private_key" in creds_data:
             pk = creds_data["private_key"]
             pk = pk.replace("\\\\n", "\n").replace("\\n", "\n")
@@ -27,7 +51,6 @@ def get_sheet():
 
         credentials = Credentials.from_service_account_info(creds_data, scopes=scopes)
         
-        # Принудительное обновление токена с синхронизацией
         request = google.auth.transport.requests.Request()
         credentials.refresh(request)
 
@@ -35,9 +58,8 @@ def get_sheet():
         sheet = gc.open(SPREADSHEET_NAME).sheet1
         return sheet, None
     except Exception as e:
-        err_msg = f"ОШИБКА ДЕТЕКТА КЛЮЧА: {e}"
-        logging.error(err_msg)
-        return None, err_msg
+        logging.error(f"Ошибка подключения: {e}")
+        return None, str(e)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
