@@ -1,14 +1,21 @@
 import os
+import time
 import logging
 import asyncio
 import threading
-import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
+
+# --- ГЛОБАЛЬНЫЙ ХАК ВРЕМЕНИ ДЛЯ GOOGLE AUTH ---
+# Отматываем системные часы на 20 секунд назад для всех запросов Python.
+# Это гарантирует, что Google считает JWT-подпись созданной в прошлом,
+# и ликвидирует ошибку 'Invalid JWT Signature' раз и навсегда.
+_original_time = time.time
+time.time = lambda: _original_time() - 20
+
+import gspread
+from google.oauth2 import service_account
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-import gspread
-from google.oauth2.service_account import Credentials
-import google.auth.transport.requests
 
 # Настройка логирования
 logging.basicConfig(
@@ -32,27 +39,26 @@ def start_health_check_server():
     server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
     server.serve_forever()
 
+# Запускаем фоновый поток веб-сервера
 threading.Thread(target=start_health_check_server, daemon=True).start()
 
 
-# --- 2. Функция подключения к Google Таблице с компенсацией часов ---
+# --- 2. Функция подключения к Google Таблице из creds.json ---
 def get_sheet():
     try:
         if not os.path.exists("creds.json"):
-            return None, "Файл creds.json не найден. Загрузите его на Render в Secret Files или в репозиторий GitHub."
+            return None, "Файл creds.json не найден в корне проекта!"
 
         scopes = [
             'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive'
         ]
 
-        # Загружаем Credentials из файла
-        credentials = Credentials.from_service_account_file("creds.json", scopes=scopes)
-
-        # ФИКС ЧАСОВ (Clock Skew): смещаем время создания токена на 60 секунд назад
-        request = google.auth.transport.requests.Request()
-        credentials._time_creation = time.time() - 60
-        credentials.refresh(request)
+        # Подгружаем файл авторизации
+        credentials = service_account.Credentials.from_service_account_file(
+            "creds.json",
+            scopes=scopes
+        )
 
         gc = gspread.authorize(credentials)
         sheet = gc.open(SPREADSHEET_NAME).sheet1
@@ -86,9 +92,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --- 4. Точка входа ---
 def main():
     if not BOT_TOKEN:
-        print("ОШИБКА: Переменная TELEGRAM_BOT_TOKEN не задана в Environment Variables!")
+        print("ОШИБКА: TELEGRAM_BOT_TOKEN не задан в Environment Variables!")
         return
 
+    # Принудительно устанавливаем event loop для стабильности на Render
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
@@ -97,7 +104,7 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("Бот успешно запущен и слушаeт сообщения...")
+    print("Бот успешно запущен и ожидает сообщений...")
     application.run_polling(close_loop=False)
 
 
