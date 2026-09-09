@@ -8,21 +8,23 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 BOT_TOKEN = "8926455676:AAEmvLB7-D68aFIlK982bnMVeofTiA4gI0Y"
 WEBAPP_URL = "https://taron331.github.io/finance-bot/"
 CREDENTIALS_FILE = "credentials.json"
-SPREADSHEET_NAME = "Учет финансов"
+SPREADSHEET_NAME = "Учет финансов"  # Название вашей Google Таблицы
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
+# Функция подключения к Google Таблице с пересозданием сессии
 def get_sheet():
     try:
         gc = gspread.service_account(filename=CREDENTIALS_FILE)
-        return gc.open(SPREADSHEET_NAME).sheet1
+        return gc.open(SPREADSHEET_NAME).sheet1, None
     except Exception as e:
         logging.error(f"Ошибка подключения к Google Таблице: {e}")
-        return None
+        return None, str(e)
 
+# Постоянная Reply-клавиатура внизу экрана
 def get_main_keyboard():
     keyboard = [
         [KeyboardButton("➕ Добавить транзакцию", web_app=WebAppInfo(url=WEBAPP_URL))],
@@ -33,7 +35,11 @@ def get_main_keyboard():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.effective_user.first_name or "Пользователь"
     await update.message.reply_text(
-        f"Привет, {user_name}! Записывайте расходы и доходы через меню ниже:",
+        f"Привет, {user_name}!\n\n"
+        "• Записывайте расходы и доходы через меню ниже.\n"
+        "• Для отчета за конкретный период отправьте команду:\n"
+        "<code>/report 01.08.2026 - 15.08.2026</code>",
+        parse_mode="HTML",
         reply_markup=get_main_keyboard()
     )
 
@@ -52,13 +58,13 @@ async def web_app_data_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         now = datetime.datetime.now()
         date_str = now.strftime("%Y-%m-%d %H:%M:%S")
 
-        sheet = get_sheet()
+        sheet, err_msg = get_sheet()
         if sheet:
-            # Записываем с колонкой "Пользователь"
+            # Записываем с колонкой "Пользователь" (Столбец F)
             sheet.append_row([date_str, trans_type, category, amount, account, user_display])
             saved_status = "✅ Сохранено в Google Таблицу!"
         else:
-            saved_status = "⚠️ Не удалось сохранить в Google Таблицу."
+            saved_status = f"⚠️ Ошибка доступа к Таблице:\n<code>{err_msg}</code>"
 
         icon = "🔴" if trans_type == "Расход" else "🟢"
 
@@ -69,7 +75,7 @@ async def web_app_data_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             f"<b>Сумма:</b> {amount:.2f} €\n"
             f"<b>Категория:</b> {category}\n"
             f"<b>Счет:</b> {account}\n\n"
-            f"<i>{saved_status}</i>"
+            f"{saved_status}"
         )
 
         await update.message.reply_text(message, parse_mode="HTML", reply_markup=get_main_keyboard())
@@ -78,9 +84,9 @@ async def web_app_data_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text(f"Ошибка при обработке данных: {e}", reply_markup=get_main_keyboard())
 
 async def monthly_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    sheet = get_sheet()
+    sheet, err_msg = get_sheet()
     if not sheet:
-        await update.message.reply_text("⚠️ Не удалось подключиться к Google Таблице.", reply_markup=get_main_keyboard())
+        await update.message.reply_text(f"⚠️ Ошибка подключения к Таблице:\n<code>{err_msg}</code>", parse_mode="HTML", reply_markup=get_main_keyboard())
         return
 
     records = sheet.get_all_values()
@@ -100,11 +106,7 @@ async def monthly_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_name = row[5] if len(row) > 5 and row[5] else "Неизвестный"
 
             if month_key not in summary:
-                summary[month_key] = {
-                    "total_exp": 0.0,
-                    "total_inc": 0.0,
-                    "users": {}
-                }
+                summary[month_key] = {"total_exp": 0.0, "total_inc": 0.0, "users": {}}
 
             if user_name not in summary[month_key]["users"]:
                 summary[month_key]["users"][user_name] = {"Расход": 0.0, "Доход": 0.0}
@@ -120,7 +122,7 @@ async def monthly_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
             continue
 
     if not summary:
-        await update.message.reply_text("ℹ️ Нет данных для формирования отчета.", reply_markup=get_main_keyboard())
+        await update.message.reply_text("ℹ️ Нет корректных данных для отчета.", reply_markup=get_main_keyboard())
         return
 
     text = "📊 <b>Семейный отчет по месяцам:</b>\n\n"
@@ -132,26 +134,123 @@ async def monthly_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         text += (
             f"📅 <b>Месяц: {month}</b>\n"
-            f"  🟢 Доходы всего: <code>{total_inc:.2f} €</code>\n"
-            f"  🔴 Расходы всего: <code>{total_exp:.2f} €</code>\n"
+            f"  🟢 Общий доход: <code>{total_inc:.2f} €</code>\n"
+            f"  🔴 Общий расход: <code>{total_exp:.2f} €</code>\n"
             f"  ⚖️ Общий баланс: <code>{balance:+.2f} €</code>\n"
-            f"  -------------------------\n"
-            f"  <b>Детализация по пользователям:</b>\n"
+            f"  ─────────────────────────\n"
+            f"  <b>Личные балансы:</b>\n"
         )
 
         for u_name, u_stats in m_data["users"].items():
             exp = u_stats["Расход"]
             inc = u_stats["Доход"]
-            text += f"  👤 <b>{u_name}:</b> 🔴 {exp:.2f} € | 🟢 {inc:.2f} €\n"
+            user_balance = inc - exp
+            text += (
+                f"  👤 <b>{u_name}:</b>\n"
+                f"     • Заработал(а): 🟢 +{inc:.2f} €\n"
+                f"     • Потратил(а): 🔴 -{exp:.2f} €\n"
+                f"     • <b>Личный баланс: {user_balance:+.2f} €</b>\n"
+            )
 
         text += "\n"
 
     await update.message.reply_text(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
-async def delete_last_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    sheet = get_sheet()
+async def custom_date_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if not args:
+        await update.message.reply_text(
+            "ℹ️ <b>Формат вызова отчета за период:</b>\n"
+            "<code>/report 01.08.2026 - 15.08.2026</code>\n\n"
+            "Или за один день:\n"
+            "<code>/report 01.08.2026</code>",
+            parse_mode="HTML",
+            reply_markup=get_main_keyboard()
+        )
+        return
+
+    raw_input = " ".join(args)
+    dates = raw_input.replace(" ", "").split("-")
+    
+    try:
+        start_date = datetime.datetime.strptime(dates[0], "%d.%m.%Y").date()
+        if len(dates) > 1:
+            end_date = datetime.datetime.strptime(dates[1], "%d.%m.%Y").date()
+        else:
+            end_date = start_date
+    except ValueError:
+        await update.message.reply_text("⚠️ Ошибка формата даты. Используйте формат: <code>ДД.ММ.ГГГГ</code> (например, <code>01.08.2026</code>)", parse_mode="HTML")
+        return
+
+    sheet, err_msg = get_sheet()
     if not sheet:
-        await update.message.reply_text("⚠️ Не удалось подключиться к Google Таблице.", reply_markup=get_main_keyboard())
+        await update.message.reply_text(f"⚠️ Ошибка доступа к Таблице:\n<code>{err_msg}</code>", parse_mode="HTML")
+        return
+
+    records = sheet.get_all_values()
+    if len(records) <= 1:
+        await update.message.reply_text("ℹ️ В таблице нет данных.", reply_markup=get_main_keyboard())
+        return
+
+    total_exp = 0.0
+    total_inc = 0.0
+    users_data = {}
+
+    for row in records[1:]:
+        if len(row) < 4:
+            continue
+        try:
+            row_date_str = row[0].split(" ")[0]
+            row_date = datetime.datetime.strptime(row_date_str, "%Y-%m-%d").date()
+
+            if start_date <= row_date <= end_date:
+                trans_type = row[1]
+                amount = float(row[3].replace(',', '.'))
+                user_name = row[5] if len(row) > 5 and row[5] else "Неизвестный"
+
+                if user_name not in users_data:
+                    users_data[user_name] = {"Расход": 0.0, "Доход": 0.0}
+
+                if trans_type == "Расход":
+                    total_exp += amount
+                    users_data[user_name]["Расход"] += amount
+                elif trans_type == "Доход":
+                    total_inc += amount
+                    users_data[user_name]["Доход"] += amount
+
+        except ValueError:
+            continue
+
+    if not users_data:
+        await update.message.reply_text(f"ℹ️ За период с {start_date.strftime('%d.%m.%Y')} по {end_date.strftime('%d.%m.%Y')} записей не найдено.", reply_markup=get_main_keyboard())
+        return
+
+    balance = total_inc - total_exp
+    text = (
+        f"📅 <b>Отчет за период: {start_date.strftime('%d.%m.%Y')} — {end_date.strftime('%d.%m.%Y')}</b>\n\n"
+        f"🟢 Общий доход: <code>{total_inc:.2f} €</code>\n"
+        f"🔴 Общий расход: <code>{total_exp:.2f} €</code>\n"
+        f"⚖️ Общий баланс: <code>{balance:+.2f} €</code>\n"
+        f"─────────────────────────\n"
+        f"<b>Личные балансы за период:</b>\n"
+    )
+
+    for u_name, u_stats in users_data.items():
+        exp = u_stats["Расход"]
+        inc = u_stats["Доход"]
+        u_bal = inc - exp
+        text += (
+            f"👤 <b>{u_name}:</b>\n"
+            f"   • Доход: 🟢 +{inc:.2f} € | Расход: 🔴 -{exp:.2f} €\n"
+            f"   • <b>Личный баланс: {u_bal:+.2f} €</b>\n"
+        )
+
+    await update.message.reply_text(text, parse_mode="HTML", reply_markup=get_main_keyboard())
+
+async def delete_last_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    sheet, err_msg = get_sheet()
+    if not sheet:
+        await update.message.reply_text(f"⚠️ Ошибка подключения к Таблице:\n<code>{err_msg}</code>", parse_mode="HTML", reply_markup=get_main_keyboard())
         return
 
     records = sheet.get_all_values()
@@ -194,7 +293,7 @@ def main():
     )
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("report", monthly_report))
+    app.add_handler(CommandHandler("report", custom_date_report))
     app.add_handler(MessageHandler(filters.Regex("^📊 Отчет по месяцам$"), monthly_report))
     app.add_handler(MessageHandler(filters.Regex("^🗑 Удалить последнюю запись$"), delete_last_entry))
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, web_app_data_handler))
