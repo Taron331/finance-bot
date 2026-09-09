@@ -192,7 +192,7 @@
     let selectedAccount = "Карта";
 
     const categoriesExpense = ["🍔 Еда", "🛒 Продукты", "🚗 Авто", "🏠 Дом", "🎉 Развлечения", "📦 Другое"];
-    const categoriesIncome = ["💼 Зарплата", "🎁 Подарок", "💰 Другое"];
+    const categoriesIncome = ["💼 Зарплата", "📈 Инвестиции", "🎁 Подарок", "💰 Другое"];
     const accounts = ["Карта", "💵 Наличные"];
 
     function populateWheels() {
@@ -221,7 +221,6 @@
       wDec.value = "00";
     }
 
-    // Синхронизация барабана, когда пользователь печатает в текстовом поле
     function syncWheelFromInput() {
       const val = document.getElementById('manualInput').value.trim().replace(',', '.');
       if (!val) return;
@@ -232,12 +231,10 @@
       const wInt = document.getElementById('wheelInt');
       const wDec = document.getElementById('wheelDec');
 
-      // Устанавливаем евро
       if (intPart >= 0 && intPart <= 500) {
         wInt.value = intPart.toString();
       }
 
-      // Устанавливаем центы, если они введены
       if (parts.length > 1) {
         let decPart = parts[1].substring(0, 2);
         if (decPart.length === 1) decPart += '0';
@@ -246,7 +243,6 @@
       }
     }
 
-    // Синхронизация поля ввода, когда крутят барабан
     function syncInputFromWheel() {
       const intVal = document.getElementById('wheelInt').value;
       const decVal = document.getElementById('wheelDec').value;
